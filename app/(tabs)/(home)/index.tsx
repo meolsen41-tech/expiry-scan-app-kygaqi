@@ -6,12 +6,14 @@ import { getProductStats, getProductEntries, type ProductEntry, type ProductStat
 import { colors } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function HomeScreen() {
   const [stats, setStats] = useState<ProductStats | null>(null);
   const [recentEntries, setRecentEntries] = useState<ProductEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { t } = useLanguage();
 
   const loadData = useCallback(async () => {
     console.log('[HomeScreen] Loading data');
@@ -84,11 +86,11 @@ export default function HomeScreen() {
   const getStatusText = (status: string): string => {
     switch (status) {
       case 'fresh':
-        return 'Fresh';
+        return t('status.fresh');
       case 'expiring_soon':
-        return 'Expiring Soon';
+        return t('status.expiringSoon');
       case 'expired':
-        return 'Expired';
+        return t('status.expired');
       default:
         return status;
     }
@@ -104,70 +106,86 @@ export default function HomeScreen() {
   const expiringSoonCount = stats?.expiringSoon || 0;
   const expiredCount = stats?.expired || 0;
 
+  const titleText = t('home.title');
+  const subtitleText = t('home.subtitle');
+  const totalProductsText = t('home.totalProducts');
+  const freshText = t('home.fresh');
+  const expiringSoonText = t('home.expiringSoon');
+  const expiredText = t('home.expired');
+  const scanBarcodeText = t('home.scanBarcode');
+  const batchScanText = t('home.batchScan');
+  const notificationsText = t('home.notifications');
+  const teamsText = t('home.teams');
+  const recentScansText = t('home.recentScans');
+  const viewAllText = t('home.viewAll');
+  const noProductsText = t('home.noProducts');
+  const noProductsSubtextText = t('home.noProductsSubtext');
+  const expiresText = t('home.expires');
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Expiry Scan</Text>
-            <Text style={styles.subtitle}>Track product expiration dates</Text>
+            <Text style={styles.greeting}>{titleText}</Text>
+            <Text style={styles.subtitle}>{subtitleText}</Text>
           </View>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{totalProducts}</Text>
-            <Text style={styles.statLabel}>Total Products</Text>
+            <Text style={styles.statLabel}>{totalProductsText}</Text>
           </View>
           <View style={[styles.statCard, styles.statCardGreen]}>
             <Text style={styles.statValue}>{freshCount}</Text>
-            <Text style={styles.statLabel}>Fresh</Text>
+            <Text style={styles.statLabel}>{freshText}</Text>
           </View>
           <View style={[styles.statCard, styles.statCardYellow]}>
             <Text style={styles.statValue}>{expiringSoonCount}</Text>
-            <Text style={styles.statLabel}>Expiring Soon</Text>
+            <Text style={styles.statLabel}>{expiringSoonText}</Text>
           </View>
           <View style={[styles.statCard, styles.statCardRed]}>
             <Text style={styles.statValue}>{expiredCount}</Text>
-            <Text style={styles.statLabel}>Expired</Text>
+            <Text style={styles.statLabel}>{expiredText}</Text>
           </View>
         </View>
 
         <View style={styles.actionsContainer}>
           <TouchableOpacity style={styles.primaryAction} onPress={handleScanPress}>
             <IconSymbol ios_icon_name="barcode.viewfinder" android_material_icon_name="qr-code-scanner" size={32} color="#FFFFFF" />
-            <Text style={styles.primaryActionText}>Scan Barcode</Text>
+            <Text style={styles.primaryActionText}>{scanBarcodeText}</Text>
           </TouchableOpacity>
 
           <View style={styles.secondaryActions}>
             <TouchableOpacity style={styles.secondaryAction} onPress={handleBatchScanPress}>
               <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>Batch Scan</Text>
+              <Text style={styles.secondaryActionText}>{batchScanText}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryAction} onPress={handleNotificationsPress}>
               <IconSymbol ios_icon_name="bell.fill" android_material_icon_name="notifications" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>Notifications</Text>
+              <Text style={styles.secondaryActionText}>{notificationsText}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryAction} onPress={handleTeamsPress}>
               <IconSymbol ios_icon_name="person.3.fill" android_material_icon_name="group" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>Teams</Text>
+              <Text style={styles.secondaryActionText}>{teamsText}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Scans</Text>
+            <Text style={styles.sectionTitle}>{recentScansText}</Text>
             <TouchableOpacity onPress={handleViewAllPress}>
-              <Text style={styles.viewAllText}>View All</Text>
+              <Text style={styles.viewAllText}>{viewAllText}</Text>
             </TouchableOpacity>
           </View>
 
           {recentEntries.length === 0 ? (
             <View style={styles.emptyState}>
               <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={48} color={colors.textSecondary} />
-              <Text style={styles.emptyText}>No products scanned yet</Text>
-              <Text style={styles.emptySubtext}>Tap "Scan Barcode" to get started</Text>
+              <Text style={styles.emptyText}>{noProductsText}</Text>
+              <Text style={styles.emptySubtext}>{noProductsSubtextText}</Text>
             </View>
           ) : (
             <View style={styles.recentList}>
@@ -180,7 +198,7 @@ export default function HomeScreen() {
                   <View key={entry.id} style={styles.recentItem}>
                     <View style={styles.recentItemInfo}>
                       <Text style={styles.recentItemName}>{entry.productName}</Text>
-                      <Text style={styles.recentItemDate}>Expires: {expirationDate}</Text>
+                      <Text style={styles.recentItemDate}>{expiresText}: {expirationDate}</Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                       <Text style={styles.statusText}>{statusText}</Text>

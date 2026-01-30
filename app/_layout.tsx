@@ -1,3 +1,4 @@
+
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
@@ -15,6 +16,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 // Note: Error logging is auto-initialized via index.ts import
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -83,15 +85,17 @@ export default function RootLayout() {
         <ThemeProvider
           value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
         >
-          <WidgetProvider>
-            <GestureHandlerRootView>
-            <Stack>
-              {/* Main app with tabs */}
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-            <SystemBars style={"auto"} />
-            </GestureHandlerRootView>
-          </WidgetProvider>
+          <LanguageProvider>
+            <WidgetProvider>
+              <GestureHandlerRootView>
+              <Stack>
+                {/* Main app with tabs */}
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              </Stack>
+              <SystemBars style={"auto"} />
+              </GestureHandlerRootView>
+            </WidgetProvider>
+          </LanguageProvider>
         </ThemeProvider>
     </>
   );
