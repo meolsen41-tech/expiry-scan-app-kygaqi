@@ -2,7 +2,7 @@
 {
   "expo": {
     "name": "Expiry Scan",
-    "slug": "Expiry Scan",
+    "slug": "expiry-scan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.expiryscan.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app needs camera access to scan product barcodes.",
@@ -28,7 +28,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively",
+      "package": "com.expiryscan.app",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -44,7 +44,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "Expiry Scan",
+    "scheme": "expiry-scan",
     "experiments": {
       "typedRoutes": true
     },
