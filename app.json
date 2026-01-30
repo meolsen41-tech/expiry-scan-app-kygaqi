@@ -18,7 +18,7 @@
       "bundleIdentifier": "com.expiryscan.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "This app needs camera access to scan product barcodes.",
+        "NSCameraUsageDescription": "Camera access is used to scan product barcodes for expiration date control in the store.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to select product images."
       }
     },
@@ -30,9 +30,9 @@
       "edgeToEdgeEnabled": true,
       "package": "com.expiryscan.app",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
