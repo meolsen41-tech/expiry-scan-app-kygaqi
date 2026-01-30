@@ -1,173 +1,196 @@
+
 import React, { useState, useEffect, useCallback } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { getProductStats, getProductEntries, type ProductEntry, type ProductStats } from "@/utils/api";
+import { colors } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
-import { colors } from "@/styles/commonStyles";
-import { getProductStats, getProductEntries, type ProductEntry, type ProductStats } from "@/utils/api";
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const [stats, setStats] = useState<ProductStats>({ total: 0, fresh: 0, expiringSoon: 0, expired: 0 });
+  const [stats, setStats] = useState<ProductStats | null>(null);
   const [recentEntries, setRecentEntries] = useState<ProductEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // Load data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      console.log('HomeScreen: Screen focused, loading data');
-      loadData();
-    }, [])
-  );
-
-  const loadData = async () => {
-    console.log('HomeScreen: Fetching stats and recent entries');
+  const loadData = useCallback(async () => {
+    console.log('[HomeScreen] Loading data');
     setLoading(true);
     try {
-      // Fetch stats from backend
-      const statsData = await getProductStats();
-      console.log('HomeScreen: Stats loaded:', statsData);
+      const [statsData, entriesData] = await Promise.all([
+        getProductStats(),
+        getProductEntries(),
+      ]);
+      
       setStats(statsData);
-
-      // Fetch recent entries from backend
-      const entriesData = await getProductEntries();
-      console.log('HomeScreen: Entries loaded:', entriesData.length, 'items');
-      setRecentEntries(entriesData);
+      // Get 5 most recent entries
+      const sorted = entriesData.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setRecentEntries(sorted.slice(0, 5));
+      
+      console.log('[HomeScreen] Data loaded:', { stats: statsData, recentCount: sorted.length });
     } catch (error) {
-      console.error('HomeScreen: Error loading data:', error);
-      // Keep empty state on error
-      setStats({ total: 0, fresh: 0, expiringSoon: 0, expired: 0 });
-      setRecentEntries([]);
+      console.error('[HomeScreen] Error loading data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleScanPress = () => {
-    console.log('HomeScreen: User tapped Scan Barcode button');
-    router.push('/scanner');
+    console.log('[HomeScreen] Navigate to scanner');
+    router.push('/(tabs)/(home)/scanner');
   };
 
   const handleViewAllPress = () => {
-    console.log('HomeScreen: User tapped View All Products button');
-    router.push('/products');
+    console.log('[HomeScreen] Navigate to products');
+    router.push('/(tabs)/(home)/products');
   };
 
-  const getStatusColor = (status: string) => {
-    if (status === 'fresh') return colors.fresh;
-    if (status === 'expiring_soon') return colors.expiringSoon;
-    if (status === 'expired') return colors.expired;
-    return colors.textSecondary;
+  const handleNotificationsPress = () => {
+    console.log('[HomeScreen] Navigate to notifications');
+    router.push('/(tabs)/(home)/notifications');
   };
 
-  const getStatusText = (status: string) => {
-    if (status === 'fresh') return 'Fresh';
-    if (status === 'expiring_soon') return 'Expiring Soon';
-    if (status === 'expired') return 'Expired';
-    return status;
+  const handleBatchScanPress = () => {
+    console.log('[HomeScreen] Navigate to batch scan');
+    router.push('/(tabs)/(home)/batch-scan');
   };
 
-  const formatDate = (dateString: string) => {
+  const handleTeamsPress = () => {
+    console.log('[HomeScreen] Navigate to teams');
+    router.push('/(tabs)/(home)/teams');
+  };
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'fresh':
+        return '#10B981';
+      case 'expiring_soon':
+        return '#F59E0B';
+      case 'expired':
+        return '#EF4444';
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  const getStatusText = (status: string): string => {
+    switch (status) {
+      case 'fresh':
+        return 'Fresh';
+      case 'expiring_soon':
+        return 'Expiring Soon';
+      case 'expired':
+        return 'Expired';
+      default:
+        return status;
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${month}/${day}/${year}`;
+    return date.toLocaleDateString();
   };
 
-  const totalCount = stats.total;
-  const freshCount = stats.fresh;
-  const expiringSoonCount = stats.expiringSoon;
-  const expiredCount = stats.expired;
+  const totalProducts = stats?.total || 0;
+  const freshCount = stats?.fresh || 0;
+  const expiringSoonCount = stats?.expiringSoon || 0;
+  const expiredCount = stats?.expired || 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.title}>Date Check</Text>
-          <Text style={styles.subtitle}>Scan products to track expiration dates</Text>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.scanButton}
-          onPress={handleScanPress}
-          activeOpacity={0.8}
-        >
-          <View style={styles.scanButtonIcon}>
-            <IconSymbol 
-              ios_icon_name="barcode.viewfinder" 
-              android_material_icon_name="qr-code-scanner" 
-              size={48} 
-              color="#FFFFFF" 
-            />
+          <View>
+            <Text style={styles.greeting}>Expiry Scan</Text>
+            <Text style={styles.subtitle}>Track product expiration dates</Text>
           </View>
-          <Text style={styles.scanButtonText}>Scan Barcode</Text>
-          <Text style={styles.scanButtonSubtext}>Tap to start scanning</Text>
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.statsContainer}>
-          <Text style={styles.statsTitle}>Overview</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{totalCount}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
-            <View style={[styles.statCard, { borderColor: colors.fresh }]}>
-              <Text style={[styles.statNumber, { color: colors.fresh }]}>{freshCount}</Text>
-              <Text style={styles.statLabel}>Fresh</Text>
-            </View>
-            <View style={[styles.statCard, { borderColor: colors.expiringSoon }]}>
-              <Text style={[styles.statNumber, { color: colors.expiringSoon }]}>{expiringSoonCount}</Text>
-              <Text style={styles.statLabel}>Expiring</Text>
-            </View>
-            <View style={[styles.statCard, { borderColor: colors.expired }]}>
-              <Text style={[styles.statNumber, { color: colors.expired }]}>{expiredCount}</Text>
-              <Text style={styles.statLabel}>Expired</Text>
-            </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{totalProducts}</Text>
+            <Text style={styles.statLabel}>Total Products</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardGreen]}>
+            <Text style={styles.statValue}>{freshCount}</Text>
+            <Text style={styles.statLabel}>Fresh</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardYellow]}>
+            <Text style={styles.statValue}>{expiringSoonCount}</Text>
+            <Text style={styles.statLabel}>Expiring Soon</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardRed]}>
+            <Text style={styles.statValue}>{expiredCount}</Text>
+            <Text style={styles.statLabel}>Expired</Text>
           </View>
         </View>
 
-        {recentEntries.length > 0 && (
-          <View style={styles.recentSection}>
-            <View style={styles.recentHeader}>
-              <Text style={styles.recentTitle}>Recent Checks</Text>
-              <TouchableOpacity onPress={handleViewAllPress}>
-                <Text style={styles.viewAllText}>View All</Text>
-              </TouchableOpacity>
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity style={styles.primaryAction} onPress={handleScanPress}>
+            <IconSymbol ios_icon_name="barcode.viewfinder" android_material_icon_name="qr-code-scanner" size={32} color="#FFFFFF" />
+            <Text style={styles.primaryActionText}>Scan Barcode</Text>
+          </TouchableOpacity>
+
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleBatchScanPress}>
+              <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={24} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>Batch Scan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleNotificationsPress}>
+              <IconSymbol ios_icon_name="bell.fill" android_material_icon_name="notifications" size={24} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>Notifications</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleTeamsPress}>
+              <IconSymbol ios_icon_name="person.3.fill" android_material_icon_name="group" size={24} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>Teams</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.recentSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Scans</Text>
+            <TouchableOpacity onPress={handleViewAllPress}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentEntries.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={48} color={colors.textSecondary} />
+              <Text style={styles.emptyText}>No products scanned yet</Text>
+              <Text style={styles.emptySubtext}>Tap "Scan Barcode" to get started</Text>
             </View>
-            {recentEntries.slice(0, 3).map((entry, index) => {
-              const statusColor = getStatusColor(entry.status);
-              const statusText = getStatusText(entry.status);
-              const formattedDate = formatDate(entry.expirationDate);
-              
-              return (
-                <View key={index} style={styles.entryCard}>
-                  <View style={styles.entryLeft}>
-                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                    <View style={styles.entryInfo}>
-                      <Text style={styles.entryName}>{entry.productName}</Text>
-                      <Text style={styles.entryDate}>Expires: {formattedDate}</Text>
+          ) : (
+            <View style={styles.recentList}>
+              {recentEntries.map((entry) => {
+                const statusColor = getStatusColor(entry.status);
+                const statusText = getStatusText(entry.status);
+                const expirationDate = formatDate(entry.expirationDate);
+                
+                return (
+                  <View key={entry.id} style={styles.recentItem}>
+                    <View style={styles.recentItemInfo}>
+                      <Text style={styles.recentItemName}>{entry.productName}</Text>
+                      <Text style={styles.recentItemDate}>Expires: {expirationDate}</Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.statusText}>{statusText}</Text>
                     </View>
                   </View>
-                  <Text style={[styles.statusBadge, { color: statusColor }]}>{statusText}</Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {recentEntries.length === 0 && !loading && (
-          <View style={styles.emptyState}>
-            <IconSymbol 
-              ios_icon_name="barcode" 
-              android_material_icon_name="qr-code" 
-              size={64} 
-              color={colors.textSecondary} 
-            />
-            <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptyText}>Start scanning barcodes to track expiration dates</Text>
-          </View>
-        )}
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -183,15 +206,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   header: {
-    marginTop: 20,
-    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
   },
-  title: {
-    fontSize: 32,
+  greeting: {
+    fontSize: 28,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 4,
@@ -200,57 +226,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
-  scanButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  scanButtonIcon: {
-    marginBottom: 12,
-  },
-  scanButtonText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  scanButtonSubtext: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
   statsContainer: {
-    marginBottom: 32,
-  },
-  statsTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 24,
   },
   statCard: {
-    width: '47%',
+    flex: 1,
+    minWidth: '45%',
     backgroundColor: colors.card,
-    borderWidth: 2,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 12,
-    padding: 16,
-    margin: 6,
     alignItems: 'center',
   },
-  statNumber: {
+  statCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  statCardYellow: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  statCardRed: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#EF4444',
+  },
+  statValue: {
     fontSize: 32,
     fontWeight: '700',
     color: colors.text,
@@ -259,17 +264,57 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
-  recentSection: {
+  actionsContainer: {
+    paddingHorizontal: 20,
     marginBottom: 32,
   },
-  recentHeader: {
+  primaryAction: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    borderRadius: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  primaryActionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    gap: 8,
+  },
+  secondaryActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  recentSection: {
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  recentTitle: {
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: colors.text,
@@ -279,59 +324,60 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-  entryCard: {
+  emptyState: {
+    alignItems: 'center',
+    padding: 48,
     backgroundColor: colors.card,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  entryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  entryInfo: {
-    flex: 1,
-  },
-  entryName: {
+  emptyText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+    marginTop: 16,
   },
-  entryDate: {
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  recentList: {
+    gap: 12,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  recentItemInfo: {
+    flex: 1,
+  },
+  recentItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  recentItemDate: {
     fontSize: 14,
     color: colors.textSecondary,
   },
   statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
+    color: '#FFFFFF',
   },
 });
