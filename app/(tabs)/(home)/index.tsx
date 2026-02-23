@@ -7,6 +7,7 @@ import { colors } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useStore } from "@/app/_layout";
 
 export default function HomeScreen() {
   const [stats, setStats] = useState<ProductStats | null>(null);
@@ -14,14 +15,15 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { t } = useLanguage();
+  const { currentStore } = useStore();
 
   const loadData = useCallback(async () => {
-    console.log('[HomeScreen] Loading data');
+    console.log('[HomeScreen] Loading data', { storeId: currentStore?.id });
     setLoading(true);
     try {
       const [statsData, entriesData] = await Promise.all([
         getProductStats(),
-        getProductEntries(),
+        getProductEntries(currentStore?.id || undefined),
       ]);
       
       setStats(statsData);

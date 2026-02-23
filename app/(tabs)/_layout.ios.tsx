@@ -8,9 +8,9 @@ export default function TabLayout() {
         <Icon sf="house.fill" />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="profile" name="profile">
-        <Icon sf="person.fill" />
-        <Label>Profile</Label>
+      <NativeTabs.Trigger key="butikk" name="butikk">
+        <Icon sf="storefront.fill" />
+        <Label>Butikk</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

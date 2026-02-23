@@ -19,10 +19,12 @@ import {
 } from '@/utils/batchScanning';
 import { getDeviceId } from '@/utils/deviceId';
 import { getProductByBarcode } from '@/utils/api';
+import { useStore } from '@/app/_layout';
 
 export default function BatchScanScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { currentStore } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [deviceId, setDeviceId] = useState<string>('');
@@ -113,10 +115,15 @@ export default function BatchScanScreen() {
       return;
     }
 
-    console.log('[BatchScan] Creating batch:', newBatchName);
+    console.log('[BatchScan] Creating batch:', newBatchName, { storeId: currentStore?.id, memberId: currentStore?.memberId });
     setLoading(true);
     try {
-      const batch = await createBatchScan(deviceId, newBatchName);
+      const batch = await createBatchScan(
+        deviceId,
+        newBatchName,
+        currentStore?.id || undefined,
+        currentStore?.memberId || undefined,
+      );
       setCurrentBatch(batch);
       setBatches([batch, ...batches]);
       setBatchItems([]);

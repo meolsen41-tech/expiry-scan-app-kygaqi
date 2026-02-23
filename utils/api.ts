@@ -76,6 +76,16 @@ export async function apiDelete<T>(endpoint: string): Promise<T> {
 }
 
 /**
+ * DELETE request helper with body (for endpoints that require a body with DELETE)
+ */
+export async function apiDeleteWithBody<T>(endpoint: string, data: any): Promise<T> {
+  return apiCall<T>(endpoint, {
+    method: 'DELETE',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
  * Upload image helper (multipart/form-data)
  */
 export async function uploadImage(imageUri: string): Promise<{ url: string; filename: string }> {
@@ -189,9 +199,13 @@ export async function createOrUpdateProduct(data: {
 /**
  * Get all product entries
  * GET /api/products/entries
+ * Optionally filter by storeId
  */
-export async function getProductEntries(): Promise<ProductEntry[]> {
-  return apiGet<ProductEntry[]>('/api/products/entries');
+export async function getProductEntries(storeId?: string): Promise<ProductEntry[]> {
+  const endpoint = storeId
+    ? `/api/products/entries?storeId=${encodeURIComponent(storeId)}`
+    : '/api/products/entries';
+  return apiGet<ProductEntry[]>(endpoint);
 }
 
 /**
@@ -207,6 +221,8 @@ export async function createProductEntry(data: {
   location?: string;
   notes?: string;
   imageUrl?: string;
+  storeId?: string;
+  createdByMemberId?: string;
 }): Promise<ProductEntry> {
   return apiPost<ProductEntry>('/api/products/entries', data);
 }

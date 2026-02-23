@@ -9,9 +9,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { getProductByBarcode, createProductEntry, uploadImage } from '@/utils/api';
 import Modal from '@/components/ui/Modal';
+import { useStore } from '@/app/_layout';
 
 export default function ScannerScreen() {
   const router = useRouter();
+  const { currentStore } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [barcode, setBarcode] = useState('');
@@ -125,7 +127,7 @@ export default function ScannerScreen() {
         console.log('ScannerScreen: Image uploaded:', uploadedImageUrl);
       }
 
-      // Create product entry
+      // Create product entry (include storeId and memberId if linked to a store)
       const entry = await createProductEntry({
         barcode,
         productName,
@@ -135,7 +137,10 @@ export default function ScannerScreen() {
         location: location || undefined,
         notes: notes || undefined,
         imageUrl: uploadedImageUrl || undefined,
+        storeId: currentStore?.id || undefined,
+        createdByMemberId: currentStore?.memberId || undefined,
       });
+      console.log('[ScannerScreen] Store context:', { storeId: currentStore?.id, memberId: currentStore?.memberId });
 
       console.log('ScannerScreen: Product entry created:', entry);
       

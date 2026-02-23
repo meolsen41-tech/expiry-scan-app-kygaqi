@@ -1,12 +1,12 @@
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, createContext, useContext, useState, useCallback } from "react";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
+import { useColorScheme } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
@@ -17,7 +17,75 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { getCurrentStore, getStoreMembers, type CurrentStore, type Member } from "@/utils/stores";
+import { getDeviceId } from "@/utils/deviceId";
 // Note: Error logging is auto-initialized via index.ts import
+
+// ============================================================
+// Store Context - provides current store info throughout app
+// ============================================================
+interface StoreContextType {
+  currentStore: CurrentStore | null;
+  members: Member[];
+  isLoading: boolean;
+  refreshStore: () => Promise<void>;
+  clearStore: () => void;
+}
+
+export const StoreContext = createContext<StoreContextType>({
+  currentStore: null,
+  members: [],
+  isLoading: false,
+  refreshStore: async () => {},
+  clearStore: () => {},
+});
+
+export function useStore(): StoreContextType {
+  return useContext(StoreContext);
+}
+
+function StoreProvider({ children }: { children: React.ReactNode }) {
+  const [currentStore, setCurrentStore] = useState<CurrentStore | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refreshStore = useCallback(async () => {
+    console.log('[StoreContext] Refreshing store data');
+    setIsLoading(true);
+    try {
+      const deviceId = await getDeviceId();
+      const store = await getCurrentStore(deviceId);
+      setCurrentStore(store);
+      if (store) {
+        const storeMembers = await getStoreMembers(store.id);
+        setMembers(storeMembers);
+      } else {
+        setMembers([]);
+      }
+    } catch (error) {
+      console.error('[StoreContext] Error refreshing store:', error);
+      setCurrentStore(null);
+      setMembers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const clearStore = useCallback(() => {
+    setCurrentStore(null);
+    setMembers([]);
+  }, []);
+
+  useEffect(() => {
+    refreshStore();
+  }, []);
+
+  return (
+    <StoreContext.Provider value={{ currentStore, members, isLoading, refreshStore, clearStore }}>
+      {children}
+    </StoreContext.Provider>
+  );
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -44,10 +112,7 @@ export default function RootLayout() {
       !networkState.isConnected &&
       networkState.isInternetReachable === false
     ) {
-      Alert.alert(
-        "🔌 You are offline",
-        "You can keep using the app! Your changes will be saved locally and synced when you are back online."
-      );
+      console.warn('[Network] Device is offline');
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
@@ -86,15 +151,17 @@ export default function RootLayout() {
           value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
         >
           <LanguageProvider>
-            <WidgetProvider>
-              <GestureHandlerRootView>
-              <Stack>
-                {/* Main app with tabs */}
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              </Stack>
-              <SystemBars style={"auto"} />
-              </GestureHandlerRootView>
-            </WidgetProvider>
+            <StoreProvider>
+              <WidgetProvider>
+                <GestureHandlerRootView>
+                  <Stack>
+                    {/* Main app with tabs */}
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  </Stack>
+                  <SystemBars style={"auto"} />
+                </GestureHandlerRootView>
+              </WidgetProvider>
+            </StoreProvider>
           </LanguageProvider>
         </ThemeProvider>
     </>

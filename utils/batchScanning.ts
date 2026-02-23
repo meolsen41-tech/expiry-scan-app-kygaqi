@@ -25,10 +25,21 @@ export interface BatchScanItem {
 
 /**
  * Create a new batch scan
+ * POST /api/batch-scans - Body: { deviceId, batchName, storeId?, createdByMemberId? }
  */
-export async function createBatchScan(deviceId: string, batchName: string): Promise<BatchScan> {
-  console.log('[BatchScan] Creating batch:', batchName);
-  return apiPost('/api/batch-scans', { deviceId, batchName });
+export async function createBatchScan(
+  deviceId: string,
+  batchName: string,
+  storeId?: string,
+  createdByMemberId?: string,
+): Promise<BatchScan> {
+  console.log('[BatchScan] Creating batch:', batchName, { storeId, createdByMemberId });
+  return apiPost('/api/batch-scans', {
+    deviceId,
+    batchName,
+    ...(storeId ? { storeId } : {}),
+    ...(createdByMemberId ? { createdByMemberId } : {}),
+  });
 }
 
 /**
