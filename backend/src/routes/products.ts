@@ -158,12 +158,18 @@ export function register(app: App, fastify: FastifyInstance) {
   );
 
   // GET /api/products/entries - Get all product entries sorted by expiration date
-  fastify.get<{}>(
+  fastify.get<{ Querystring: { storeId?: string } }>(
     '/api/products/entries',
     {
       schema: {
         description: 'Get all product entries',
         tags: ['product-entries'],
+        querystring: {
+          type: 'object',
+          properties: {
+            storeId: { type: 'string' },
+          },
+        },
         response: {
           200: {
             type: 'array',
@@ -181,6 +187,8 @@ export function register(app: App, fastify: FastifyInstance) {
                 notes: { type: 'string' },
                 imageUrl: { type: 'string' },
                 status: { type: 'string' },
+                storeId: { type: 'string' },
+                createdByMemberId: { type: 'string' },
                 createdAt: { type: 'string' },
                 updatedAt: { type: 'string' },
               },
@@ -190,18 +198,29 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      app.logger.info({}, 'Fetching all product entries');
+      const { storeId } = request.query;
+      app.logger.info({ storeId }, 'Fetching product entries');
 
       try {
-        const entries = await app.db
-          .select()
-          .from(schema.productEntries)
-          .orderBy(schema.productEntries.expirationDate);
+        let entries;
 
-        app.logger.info({ count: entries.length }, 'Product entries retrieved successfully');
+        if (storeId) {
+          entries = await app.db
+            .select()
+            .from(schema.productEntries)
+            .where(eq(schema.productEntries.storeId, storeId))
+            .orderBy(schema.productEntries.expirationDate);
+        } else {
+          entries = await app.db
+            .select()
+            .from(schema.productEntries)
+            .orderBy(schema.productEntries.expirationDate);
+        }
+
+        app.logger.info({ count: entries.length, storeId }, 'Product entries retrieved successfully');
         return entries;
       } catch (error) {
-        app.logger.error({ err: error }, 'Failed to fetch product entries');
+        app.logger.error({ err: error, storeId }, 'Failed to fetch product entries');
         throw error;
       }
     }
@@ -218,6 +237,8 @@ export function register(app: App, fastify: FastifyInstance) {
       location?: string;
       notes?: string;
       imageUrl?: string;
+      storeId?: string;
+      createdByMemberId?: string;
     };
   }>(
     '/api/products/entries',
@@ -237,6 +258,8 @@ export function register(app: App, fastify: FastifyInstance) {
             location: { type: 'string' },
             notes: { type: 'string' },
             imageUrl: { type: 'string' },
+            storeId: { type: 'string' },
+            createdByMemberId: { type: 'string' },
           },
         },
         response: {
@@ -254,6 +277,8 @@ export function register(app: App, fastify: FastifyInstance) {
               notes: { type: 'string' },
               imageUrl: { type: 'string' },
               status: { type: 'string' },
+              storeId: { type: 'string' },
+              createdByMemberId: { type: 'string' },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
             },
@@ -262,9 +287,9 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { barcode, productName, category, expirationDate, quantity, location, notes, imageUrl } = request.body;
+      const { barcode, productName, category, expirationDate, quantity, location, notes, imageUrl, storeId, createdByMemberId } = request.body;
       app.logger.info(
-        { barcode, productName, expirationDate },
+        { barcode, productName, expirationDate, storeId },
         'Creating product entry'
       );
 
@@ -309,10 +334,12 @@ export function register(app: App, fastify: FastifyInstance) {
             notes,
             imageUrl,
             status,
+            storeId,
+            createdByMemberId,
           })
           .returning();
 
-        app.logger.info({ entryId: entry[0].id, status }, 'Product entry created successfully');
+        app.logger.info({ entryId: entry[0].id, status, storeId }, 'Product entry created successfully');
         return entry[0];
       } catch (error) {
         app.logger.error({ err: error, barcode, productName }, 'Failed to create product entry');

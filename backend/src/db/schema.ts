@@ -10,6 +10,23 @@ export const products = pgTable('products', {
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 });
 
+export const stores = pgTable('stores', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  joinCode: text('join_code').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export const members = pgTable('members', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  storeId: uuid('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  nickname: text('nickname').notNull(),
+  deviceId: text('device_id').notNull(),
+  role: text('role').notNull(), // 'owner' or 'member'
+  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+});
+
 export const productEntries = pgTable('product_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
@@ -22,7 +39,9 @@ export const productEntries = pgTable('product_entries', {
   notes: text('notes'),
   imageUrl: text('image_url'),
   status: text('status').default('fresh').notNull(), // 'fresh', 'expiring_soon', 'expired'
-  scannedByDeviceId: text('scanned_by_device_id'), // for team tracking
+  storeId: uuid('store_id').references(() => stores.id, { onDelete: 'set null' }),
+  createdByMemberId: uuid('created_by_member_id').references(() => members.id, { onDelete: 'set null' }),
+  scannedByDeviceId: text('scanned_by_device_id'), // for backward compatibility
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 });
@@ -54,6 +73,8 @@ export const batchScans = pgTable('batch_scans', {
   batchName: text('batch_name').notNull(),
   status: text('status').notNull().default('in_progress'), // 'in_progress' or 'completed'
   itemCount: integer('item_count').default(0),
+  storeId: uuid('store_id').references(() => stores.id, { onDelete: 'set null' }),
+  createdByMemberId: uuid('created_by_member_id').references(() => members.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });
@@ -70,22 +91,4 @@ export const batchScanItems = pgTable('batch_scan_items', {
   notes: text('notes'),
   imageUrl: text('image_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-export const teams = pgTable('teams', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  inviteCode: text('invite_code').notNull().unique(),
-  createdBy: text('created_by').notNull(), // device_id
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
-});
-
-export const teamMembers = pgTable('team_members', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  deviceId: text('device_id').notNull(),
-  deviceName: text('device_name').notNull(),
-  role: text('role').notNull(), // 'owner' or 'member'
-  joinedAt: timestamp('joined_at').defaultNow().notNull(),
 });

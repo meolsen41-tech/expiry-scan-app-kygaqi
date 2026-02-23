@@ -15,6 +15,13 @@
       "when": 1769785302441,
       "tag": "20260130150142_furry_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771885385958,
+      "tag": "20260223222305_known_impossible_man",
+      "breakpoints": true
     }
   ]
 }

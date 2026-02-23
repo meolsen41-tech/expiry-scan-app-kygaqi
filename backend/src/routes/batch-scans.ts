@@ -24,7 +24,7 @@ function calculateStatus(expirationDateStr: string): 'fresh' | 'expiring_soon' |
 export function register(app: App, fastify: FastifyInstance) {
   // POST /api/batch-scans - Create new batch scan
   fastify.post<{
-    Body: { deviceId: string; batchName: string };
+    Body: { deviceId: string; batchName: string; storeId?: string; createdByMemberId?: string };
   }>(
     '/api/batch-scans',
     {
@@ -37,6 +37,8 @@ export function register(app: App, fastify: FastifyInstance) {
           properties: {
             deviceId: { type: 'string' },
             batchName: { type: 'string' },
+            storeId: { type: 'string' },
+            createdByMemberId: { type: 'string' },
           },
         },
         response: {
@@ -48,14 +50,16 @@ export function register(app: App, fastify: FastifyInstance) {
               status: { type: 'string' },
               itemCount: { type: 'integer' },
               createdAt: { type: 'string' },
+              storeId: { type: 'string' },
+              createdByMemberId: { type: 'string' },
             },
           },
         },
       },
     },
     async (request, reply) => {
-      const { deviceId, batchName } = request.body;
-      app.logger.info({ deviceId, batchName }, 'Creating batch scan');
+      const { deviceId, batchName, storeId, createdByMemberId } = request.body;
+      app.logger.info({ deviceId, batchName, storeId }, 'Creating batch scan');
 
       try {
         const batch = await app.db
@@ -65,10 +69,12 @@ export function register(app: App, fastify: FastifyInstance) {
             batchName,
             status: 'in_progress',
             itemCount: 0,
+            storeId,
+            createdByMemberId,
           })
           .returning();
 
-        app.logger.info({ batchId: batch[0].id }, 'Batch scan created');
+        app.logger.info({ batchId: batch[0].id, storeId }, 'Batch scan created');
         return batch[0];
       } catch (error) {
         app.logger.error({ err: error, deviceId, batchName }, 'Failed to create batch scan');
@@ -389,6 +395,8 @@ export function register(app: App, fastify: FastifyInstance) {
               notes: item.notes,
               imageUrl: item.imageUrl,
               status,
+              storeId: batch[0].storeId,
+              createdByMemberId: batch[0].createdByMemberId,
               scannedByDeviceId: batch[0].deviceId,
             });
 
