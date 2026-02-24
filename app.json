@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Expiry Scan",
-    "slug": "expiryscan",
+    "slug": "Expiry Scan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -57,13 +57,13 @@
         }
       ]
     ],
-    "scheme": "expiryscan",
+    "scheme": "Expiry Scan",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://w3f43t2kmtyuxwjrwvs9umtzbabawtxe.app.specular.dev"
+      "backendUrl": "https://738bb4xsqh8vau99nbj6vkhtt6axmven.app.specular.dev"
     }
   }
 }
