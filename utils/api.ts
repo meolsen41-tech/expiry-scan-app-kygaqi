@@ -28,15 +28,24 @@ async function apiCall<T>(
     console.log(`[API] Response status: ${response.status}`);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      const errorMsg = errorData?.error || errorData?.message || `HTTP ${response.status}`;
+      // Only log as error for non-404 responses (404 is expected for "not found" cases)
+      if (response.status !== 404) {
+        console.error(`[API] HTTP Error ${response.status}:`, errorMsg);
+      }
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
     console.log(`[API] Success:`, data);
     return data;
-  } catch (error) {
-    console.error(`[API] Error:`, error);
+  } catch (error: any) {
+    // Only log unexpected errors (not 404s which are handled by callers)
+    const msg = error?.message || '';
+    if (!msg.includes('HTTP 404') && !msg.includes('not found') && !msg.includes('Not Found')) {
+      console.error(`[API] Error:`, error);
+    }
     throw error;
   }
 }
@@ -138,7 +147,8 @@ export interface Product {
   barcode: string;
   name?: string;
   primaryImageUrl?: string;
-  primaryImageSource?: string;
+  primaryImageSourceStoreId?: string;
+  primaryImageSourceMemberId?: string;
   createdAt: string;
 }
 
@@ -246,31 +256,33 @@ export async function uploadProductImage(
   memberId: string
 ): Promise<ProductImage> {
   return apiPost<ProductImage>(`/api/products/${barcode}/images`, {
-    imageUrl: imageUrl,
-    uploadedByStoreId: storeId,
-    uploadedByMemberId: memberId,
+    imageUrl,
+    storeId,
+    memberId,
   });
 }
 
 /**
  * Get expiry batches for a store
- * GET /api/expiry-batches?storeId=xxx&status=xxx
+ * GET /api/stores/:storeId/expiry-batches?status=xxx
  */
 export async function getExpiryBatches(params: {
   store_id: string;
   status?: 'all' | 'fresh' | 'expiring' | 'expired';
 }): Promise<ExpiryBatch[]> {
   const queryParams = new URLSearchParams();
-  queryParams.append('storeId', params.store_id);
-  if (params.status) {
+  if (params.status && params.status !== 'all') {
     queryParams.append('status', params.status);
   }
-  return apiGet<ExpiryBatch[]>(`/api/expiry-batches?${queryParams.toString()}`);
+  const query = queryParams.toString();
+  const endpoint = `/api/stores/${encodeURIComponent(params.store_id)}/expiry-batches${query ? `?${query}` : ''}`;
+  console.log(`[API] getExpiryBatches endpoint: ${endpoint}`);
+  return apiGet<ExpiryBatch[]>(endpoint);
 }
 
 /**
  * Create a new expiry batch
- * POST /api/expiry-batches
+ * POST /api/stores/:storeId/expiry-batches
  */
 export async function createExpiryBatch(data: {
   store_id: string;
@@ -280,8 +292,8 @@ export async function createExpiryBatch(data: {
   added_by_member_id: string;
   note?: string;
 }): Promise<ExpiryBatch> {
-  return apiPost<ExpiryBatch>('/api/expiry-batches', {
-    storeId: data.store_id,
+  console.log(`[API] createExpiryBatch for store: ${data.store_id}`);
+  return apiPost<ExpiryBatch>(`/api/stores/${encodeURIComponent(data.store_id)}/expiry-batches`, {
     barcode: data.barcode,
     expiryDate: data.expiry_date,
     quantity: data.quantity,
@@ -311,10 +323,11 @@ export async function updateExpiryBatch(
 
 /**
  * Delete an expiry batch
- * DELETE /api/expiry-batches/:id?storeId=xxx
+ * DELETE /api/stores/:storeId/expiry-batches/:id
  */
 export async function deleteExpiryBatch(id: string, storeId: string): Promise<{ success: boolean }> {
-  return apiDelete<{ success: boolean }>(`/api/expiry-batches/${id}?storeId=${encodeURIComponent(storeId)}`);
+  console.log(`[API] deleteExpiryBatch id=${id} storeId=${storeId}`);
+  return apiDelete<{ success: boolean }>(`/api/stores/${encodeURIComponent(storeId)}/expiry-batches/${id}`);
 }
 
 /**

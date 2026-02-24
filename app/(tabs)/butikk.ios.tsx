@@ -104,7 +104,7 @@ export default function ButikkScreen() {
       const deviceId = await getDeviceId();
       const store = await createStore(trimmedName, trimmedNickname, deviceId);
       
-      const successMessage = t('store.storeCreatedMessage', { name: store.name, code: store.joinCode });
+      const successMessage = t('store.storeCreatedMessage', { name: store.name, code: store.storeCode });
       showModal('success', t('store.storeCreated'), successMessage);
       
       setStoreName('');
@@ -160,7 +160,7 @@ export default function ButikkScreen() {
     
     try {
       await Share.share({
-        message: `${t('store.storeCode')}: ${currentStore.joinCode}\n${t('store.storeName')}: ${currentStore.name}`,
+        message: `${t('store.storeCode')}: ${currentStore.storeCode}\n${t('store.storeName')}: ${currentStore.name}`,
       });
     } catch (error: any) {
       console.error('[ButikkScreen] Error sharing code:', error);
@@ -168,7 +168,7 @@ export default function ButikkScreen() {
   };
   
   const handleShowQR = () => {
-    showModal('info', t('store.showQR'), `${t('store.storeCode')}: ${currentStore?.joinCode}`);
+    showModal('info', t('store.showQR'), `${t('store.storeCode')}: ${currentStore?.storeCode}`);
   };
   
   const handleSwitchStore = () => {
@@ -407,12 +407,12 @@ export default function ButikkScreen() {
               
               <Text style={[styles.storeName, { color: theme.colors.text }]}>{currentStore.name}</Text>
               <Text style={[styles.storeRole, { color: theme.dark ? '#98989D' : '#666' }]}>
-                {currentStore.role === 'owner' ? t('store.owner') : t('store.member')} • {currentStore.nickname}
+                {currentStore.role === 'admin' ? t('store.admin') : t('store.staff')} • {currentStore.nickname}
               </Text>
               
               <View style={styles.codeContainer}>
                 <Text style={[styles.codeLabel, { color: theme.dark ? '#98989D' : '#666' }]}>{t('store.storeCode')}</Text>
-                <Text style={[styles.codeValue, { color: theme.colors.text }]}>{currentStore.joinCode}</Text>
+                <Text style={[styles.codeValue, { color: theme.colors.text }]}>{currentStore.storeCode}</Text>
               </View>
               
               <View style={styles.codeActions}>
@@ -445,15 +445,15 @@ export default function ButikkScreen() {
                   <View style={styles.memberItem}>
                     <View style={styles.memberInfo}>
                       <IconSymbol
-                        ios_icon_name={member.role === 'owner' ? 'crown.fill' : 'person.fill'}
-                        android_material_icon_name={member.role === 'owner' ? 'star' : 'person'}
+                        ios_icon_name={member.role === 'admin' ? 'crown.fill' : 'person.fill'}
+                        android_material_icon_name={member.role === 'admin' ? 'star' : 'person'}
                         size={24}
-                        color={member.role === 'owner' ? colors.primary : theme.dark ? '#98989D' : '#666'}
+                        color={member.role === 'admin' ? colors.primary : theme.dark ? '#98989D' : '#666'}
                       />
                       <View style={styles.memberDetails}>
                         <Text style={[styles.memberNickname, { color: theme.colors.text }]}>{member.nickname}</Text>
                         <Text style={[styles.memberRole, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          {member.role === 'owner' ? t('store.owner') : t('store.member')} • {formatDate(member.joinedAt)}
+                          {member.role === 'admin' ? t('store.admin') : t('store.staff')} • {formatDate(member.joinedAt)}
                         </Text>
                       </View>
                     </View>
@@ -482,7 +482,7 @@ export default function ButikkScreen() {
                 <Text style={[styles.actionButtonText, { color: theme.dark ? '#98989D' : '#666' }]}>{t('store.leaveStore')}</Text>
               </TouchableOpacity>
               
-              {currentStore.role === 'owner' && (
+              {currentStore.role === 'admin' && (
                 <TouchableOpacity
                   style={[styles.actionButton, { borderColor: colors.error }]}
                   onPress={handleDeleteStore}

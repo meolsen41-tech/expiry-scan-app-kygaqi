@@ -18,6 +18,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { getCurrentStore, getStoreMembers, type CurrentStore, type Member } from "@/utils/stores";
+import { getDeviceId } from "@/utils/deviceId";
 
 // Note: Error logging is auto-initialized via index.ts import
 
@@ -56,11 +57,25 @@ function StoreProvider({ children }: { children: React.ReactNode }) {
       const deviceId = await getDeviceId();
       const store = await getCurrentStore(deviceId);
       if (store) {
-        const storeMembers = await getStoreMembers(store.id);
+        // getCurrentStore already returns memberId and members from the API
+        // Also fetch members separately to ensure we have the latest data
+        let storeMembers: Member[] = [];
+        try {
+          storeMembers = await getStoreMembers(store.id);
+        } catch (err) {
+          console.warn('[StoreContext] Could not fetch members separately, using members from store response');
+          // Fall back to members included in the store response
+          storeMembers = (store.members || []).map((m: any) => ({
+            id: m.id,
+            storeId: store.id,
+            nickname: m.nickname,
+            role: (m.role as 'admin' | 'staff') || 'staff',
+            joinedAt: m.joinedAt || m.createdAt || new Date().toISOString(),
+          }));
+        }
         setMembers(storeMembers);
-        // Find the current member's ID by matching nickname
-        const currentMember = storeMembers.find((m: Member) => m.nickname === store.nickname);
-        const memberId = currentMember?.id;
+        // Use memberId from the API response directly
+        const memberId = store.memberId;
         console.log('[StoreContext] Store loaded:', { storeId: store.id, memberId, memberCount: storeMembers.length });
         setCurrentStore({ ...store, memberId, members: storeMembers });
       } else {
@@ -68,8 +83,8 @@ function StoreProvider({ children }: { children: React.ReactNode }) {
         setCurrentStore(null);
         setMembers([]);
       }
-    } catch (error) {
-      console.error('[StoreContext] Error refreshing store:', error);
+    } catch (error: any) {
+      console.error('[StoreContext] Unexpected error refreshing store:', error);
       setCurrentStore(null);
       setMembers([]);
     } finally {
