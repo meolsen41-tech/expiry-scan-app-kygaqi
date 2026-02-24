@@ -405,35 +405,62 @@ export function register(app: App, fastify: FastifyInstance) {
           return reply.status(404).send({ error: 'No push token registered' });
         }
 
-        // Get products expiring soon for this device
-        const expiringProducts = await app.db
+        // Get device's store
+        const member = await app.db
           .select()
-          .from(schema.productEntries)
-          .where(
-            and(
-              eq(schema.productEntries.status, 'expiring_soon'),
-              eq(schema.productEntries.scannedByDeviceId, deviceId)
-            )
-          );
+          .from(schema.members)
+          .where(eq(schema.members.deviceId, deviceId))
+          .limit(1);
+
+        if (member.length === 0) {
+          app.logger.warn({ deviceId }, 'Device not linked to any store');
+          return reply.status(404).send({ error: 'Device not linked to any store' });
+        }
+
+        const storeId = member[0].storeId;
+
+        // Get expiring batches for the store (expiring within 7 days or expired)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const sevenDaysFromNow = new Date(today);
+        sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+        const expiringBatches = await app.db
+          .select({
+            id: schema.expiryBatches.id,
+            barcode: schema.expiryBatches.barcode,
+            expiryDate: schema.expiryBatches.expiryDate,
+            productName: schema.products.name,
+          })
+          .from(schema.expiryBatches)
+          .innerJoin(schema.products, eq(schema.expiryBatches.barcode, schema.products.barcode))
+          .where(eq(schema.expiryBatches.storeId, storeId));
 
         let notificationsSent = 0;
 
-        for (const product of expiringProducts) {
-          const sent = await sendExpoNotification(
-            pushToken[0].expoPushToken,
-            'Product Expiring Soon',
-            `${product.productName} expires on ${product.expirationDate}`,
-            {
-              productId: product.id,
-              expirationDate: product.expirationDate,
+        for (const batch of expiringBatches) {
+          // Check if expiring soon (within 7 days) or already expired
+          const expiryDate = new Date(batch.expiryDate);
+          expiryDate.setHours(0, 0, 0, 0);
+          const daysUntilExpiry = Math.floor((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (daysUntilExpiry <= 7) {
+            const sent = await sendExpoNotification(
+              pushToken[0].expoPushToken,
+              'Product Expiring Soon',
+              `${batch.productName || batch.barcode} expires on ${batch.expiryDate}`,
+              {
+                batchId: batch.id,
+                expiryDate: batch.expiryDate,
+              }
+            );
+            if (sent) {
+              notificationsSent++;
             }
-          );
-          if (sent) {
-            notificationsSent++;
           }
         }
 
-        app.logger.info({ deviceId, notificationsSent }, 'Expiration reminders sent');
+        app.logger.info({ deviceId, storeId, notificationsSent }, 'Expiration reminders sent');
         return { success: true, notificationsSent };
       } catch (error) {
         app.logger.error({ err: error, deviceId }, 'Failed to send expiration reminders');

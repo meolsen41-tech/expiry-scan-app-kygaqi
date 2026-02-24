@@ -4,6 +4,7 @@ import * as productsRoutes from './routes/products.js';
 import * as uploadRoutes from './routes/upload.js';
 import * as notificationsRoutes from './routes/notifications.js';
 import * as batchScansRoutes from './routes/batch-scans.js';
+import * as expiryBatchesRoutes from './routes/expiry-batches.js';
 import * as storesRoutes from './routes/stores.js';
 
 // Create application with schema for full database type support
@@ -20,6 +21,7 @@ productsRoutes.register(app, app.fastify);
 uploadRoutes.register(app, app.fastify);
 notificationsRoutes.register(app, app.fastify);
 batchScansRoutes.register(app, app.fastify);
+expiryBatchesRoutes.register(app, app.fastify);
 storesRoutes.register(app, app.fastify);
 
 await app.run();

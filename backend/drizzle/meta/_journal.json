@@ -22,6 +22,13 @@
       "when": 1771885385958,
       "tag": "20260223222305_known_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771924849064,
+      "tag": "20260224092049_striped_wong",
+      "breakpoints": true
     }
   ]
 }

@@ -1,15 +1,5 @@
 import { pgTable, uuid, text, timestamp, date, integer, boolean } from 'drizzle-orm/pg-core';
 
-export const products = pgTable('products', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  barcode: text('barcode').notNull().unique(),
-  name: text('name').notNull(),
-  category: text('category'),
-  imageUrl: text('image_url'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
-});
-
 export const stores = pgTable('stores', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -27,9 +17,38 @@ export const members = pgTable('members', {
   joinedAt: timestamp('joined_at').defaultNow().notNull(),
 });
 
+export const products = pgTable('products', {
+  barcode: text('barcode').primaryKey(),
+  name: text('name'),
+  primaryImageUrl: text('primary_image_url'),
+  primaryImageSource: text('primary_image_source'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const productImages = pgTable('product_images', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  barcode: text('barcode').notNull().references(() => products.barcode, { onDelete: 'cascade' }),
+  imageUrl: text('image_url').notNull(),
+  uploadedByStoreId: uuid('uploaded_by_store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  uploadedByMemberId: uuid('uploaded_by_member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
+  isPrimary: boolean('is_primary').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const expiryBatches = pgTable('expiry_batches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  storeId: uuid('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  barcode: text('barcode').notNull().references(() => products.barcode, { onDelete: 'cascade' }),
+  expiryDate: date('expiry_date', { mode: 'string' }).notNull(),
+  quantity: integer('quantity').notNull(),
+  addedByMemberId: uuid('added_by_member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
+  note: text('note'),
+  addedAt: timestamp('added_at').defaultNow().notNull(),
+});
+
+// Legacy table for backward compatibility - can be removed after migration
 export const productEntries = pgTable('product_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
-  productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
   barcode: text('barcode').notNull(),
   productName: text('product_name').notNull(),
   category: text('category'),
@@ -38,10 +57,10 @@ export const productEntries = pgTable('product_entries', {
   location: text('location'),
   notes: text('notes'),
   imageUrl: text('image_url'),
-  status: text('status').default('fresh').notNull(), // 'fresh', 'expiring_soon', 'expired'
+  status: text('status').default('fresh').notNull(),
   storeId: uuid('store_id').references(() => stores.id, { onDelete: 'set null' }),
   createdByMemberId: uuid('created_by_member_id').references(() => members.id, { onDelete: 'set null' }),
-  scannedByDeviceId: text('scanned_by_device_id'), // for backward compatibility
+  scannedByDeviceId: text('scanned_by_device_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 });

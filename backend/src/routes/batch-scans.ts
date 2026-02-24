@@ -1,25 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
-
-function calculateStatus(expirationDateStr: string): 'fresh' | 'expiring_soon' | 'expired' {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const expiration = new Date(expirationDateStr);
-  expiration.setHours(0, 0, 0, 0);
-
-  const daysUntilExpiration = Math.floor((expiration.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (daysUntilExpiration < 0) {
-    return 'expired';
-  } else if (daysUntilExpiration <= 7) {
-    return 'expiring_soon';
-  } else {
-    return 'fresh';
-  }
-}
 
 export function register(app: App, fastify: FastifyInstance) {
   // POST /api/batch-scans - Create new batch scan
@@ -183,7 +165,7 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { batchId } = request.params;
-      const { barcode, productName, expirationDate, category, quantity, location, notes, imageUrl } = request.body;
+      const { barcode, productName, expirationDate, quantity } = request.body;
       app.logger.info({ batchId, barcode, productName }, 'Adding item to batch scan');
 
       try {
@@ -208,11 +190,7 @@ export function register(app: App, fastify: FastifyInstance) {
             barcode,
             productName,
             expirationDate,
-            category,
             quantity: quantity || 1,
-            location,
-            notes,
-            imageUrl,
           })
           .returning();
 
@@ -264,11 +242,7 @@ export function register(app: App, fastify: FastifyInstance) {
                 barcode: { type: 'string' },
                 productName: { type: 'string' },
                 expirationDate: { type: 'string' },
-                category: { type: 'string' },
                 quantity: { type: 'integer' },
-                location: { type: 'string' },
-                notes: { type: 'string' },
-                imageUrl: { type: 'string' },
                 createdAt: { type: 'string' },
               },
             },
@@ -303,12 +277,12 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   );
 
-  // POST /api/batch-scans/:batchId/complete - Complete batch and create entries
+  // POST /api/batch-scans/:batchId/complete - Complete batch and create expiry batches
   fastify.post<{ Params: { batchId: string } }>(
     '/api/batch-scans/:batchId/complete',
     {
       schema: {
-        description: 'Complete batch scan and create entries',
+        description: 'Complete batch scan and create expiry batches',
         tags: ['batch-scans'],
         params: {
           type: 'object',
@@ -345,6 +319,12 @@ export function register(app: App, fastify: FastifyInstance) {
           return reply.status(400).send({ error: 'Batch is not in progress' });
         }
 
+        // Must have storeId and memberId to create expiry batches
+        if (!batch[0].storeId || !batch[0].createdByMemberId) {
+          app.logger.warn({ batchId }, 'Batch missing store or member information');
+          return reply.status(400).send({ error: 'Batch missing store or member information' });
+        }
+
         // Get all items in batch
         const items = await app.db
           .select()
@@ -353,52 +333,30 @@ export function register(app: App, fastify: FastifyInstance) {
 
         let entriesCreated = 0;
 
-        // Create product entries for each item
+        // Create expiry batch entries for each item
         for (const item of items) {
-          // Create or get product
+          // Ensure product exists
           const existingProduct = await app.db
             .select()
             .from(schema.products)
             .where(eq(schema.products.barcode, item.barcode))
             .limit(1);
 
-          let productId: string;
-          if (existingProduct.length > 0) {
-            productId = existingProduct[0].id;
-          } else {
-            const created = await app.db
-              .insert(schema.products)
-              .values({
-                barcode: item.barcode,
-                name: item.productName,
-                category: item.category,
-                imageUrl: item.imageUrl,
-              })
-              .returning();
-            productId = created[0].id;
+          if (existingProduct.length === 0) {
+            await app.db.insert(schema.products).values({
+              barcode: item.barcode,
+              name: item.productName,
+            });
           }
 
-          // Calculate status
-          const status = calculateStatus(item.expirationDate);
-
-          // Create product entry
-          await app.db
-            .insert(schema.productEntries)
-            .values({
-              productId,
-              barcode: item.barcode,
-              productName: item.productName,
-              category: item.category,
-              expirationDate: item.expirationDate,
-              quantity: item.quantity,
-              location: item.location,
-              notes: item.notes,
-              imageUrl: item.imageUrl,
-              status,
-              storeId: batch[0].storeId,
-              createdByMemberId: batch[0].createdByMemberId,
-              scannedByDeviceId: batch[0].deviceId,
-            });
+          // Create expiry batch entry
+          await app.db.insert(schema.expiryBatches).values({
+            storeId: batch[0].storeId!,
+            barcode: item.barcode,
+            expiryDate: item.expirationDate,
+            quantity: item.quantity,
+            addedByMemberId: batch[0].createdByMemberId!,
+          });
 
           entriesCreated++;
         }
