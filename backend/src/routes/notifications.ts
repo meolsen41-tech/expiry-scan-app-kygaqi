@@ -408,8 +408,8 @@ export function register(app: App, fastify: FastifyInstance) {
         // Get device's store
         const member = await app.db
           .select()
-          .from(schema.members)
-          .where(eq(schema.members.deviceId, deviceId))
+          .from(schema.storeMembers)
+          .where(eq(schema.storeMembers.deviceId, deviceId))
           .limit(1);
 
         if (member.length === 0) {

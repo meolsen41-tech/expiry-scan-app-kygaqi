@@ -359,7 +359,8 @@ export function register(app: App, fastify: FastifyInstance) {
             .update(schema.products)
             .set({
               primaryImageUrl: url,
-              primaryImageSource: `${storeId}:${memberId}`,
+              primaryImageSourceStoreId: storeId,
+              primaryImageSourceMemberId: memberId,
             })
             .where(eq(schema.products.barcode, barcode));
         }

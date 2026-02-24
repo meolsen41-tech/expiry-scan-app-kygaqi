@@ -3,25 +3,25 @@ import { pgTable, uuid, text, timestamp, date, integer, boolean } from 'drizzle-
 export const stores = pgTable('stores', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  joinCode: text('join_code').notNull().unique(),
+  storeCode: text('store_code').notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 });
 
-export const members = pgTable('members', {
+export const storeMembers = pgTable('store_members', {
   id: uuid('id').primaryKey().defaultRandom(),
   storeId: uuid('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
   nickname: text('nickname').notNull(),
+  role: text('role').notNull(), // 'admin' or 'staff'
   deviceId: text('device_id').notNull(),
-  role: text('role').notNull(), // 'owner' or 'member'
-  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 export const products = pgTable('products', {
   barcode: text('barcode').primaryKey(),
   name: text('name'),
   primaryImageUrl: text('primary_image_url'),
-  primaryImageSource: text('primary_image_source'),
+  primaryImageSourceStoreId: uuid('primary_image_source_store_id'),
+  primaryImageSourceMemberId: uuid('primary_image_source_member_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -30,7 +30,7 @@ export const productImages = pgTable('product_images', {
   barcode: text('barcode').notNull().references(() => products.barcode, { onDelete: 'cascade' }),
   imageUrl: text('image_url').notNull(),
   uploadedByStoreId: uuid('uploaded_by_store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
-  uploadedByMemberId: uuid('uploaded_by_member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
+  uploadedByMemberId: uuid('uploaded_by_member_id').notNull().references(() => storeMembers.id, { onDelete: 'cascade' }),
   isPrimary: boolean('is_primary').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -41,12 +41,21 @@ export const expiryBatches = pgTable('expiry_batches', {
   barcode: text('barcode').notNull().references(() => products.barcode, { onDelete: 'cascade' }),
   expiryDate: date('expiry_date', { mode: 'string' }).notNull(),
   quantity: integer('quantity').notNull(),
-  addedByMemberId: uuid('added_by_member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
   note: text('note'),
+  addedByMemberId: uuid('added_by_member_id').notNull().references(() => storeMembers.id, { onDelete: 'cascade' }),
   addedAt: timestamp('added_at').defaultNow().notNull(),
 });
 
-// Legacy table for backward compatibility - can be removed after migration
+// Legacy tables for backward compatibility - can be removed after migration
+export const members = pgTable('members', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  storeId: uuid('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  nickname: text('nickname').notNull(),
+  deviceId: text('device_id').notNull(),
+  role: text('role').notNull(),
+  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+});
+
 export const productEntries = pgTable('product_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   barcode: text('barcode').notNull(),
@@ -70,7 +79,7 @@ export const pushTokens = pgTable('push_tokens', {
   userId: text('user_id').notNull(),
   deviceId: text('device_id').notNull().unique(),
   expoPushToken: text('expo_push_token').notNull(),
-  platform: text('platform').notNull(), // 'ios' or 'android'
+  platform: text('platform').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 });
@@ -78,9 +87,9 @@ export const pushTokens = pgTable('push_tokens', {
 export const notificationSchedules = pgTable('notification_schedules', {
   id: uuid('id').primaryKey().defaultRandom(),
   deviceId: text('device_id').notNull().references(() => pushTokens.deviceId, { onDelete: 'cascade' }),
-  scheduleType: text('schedule_type').notNull(), // 'weekly' or 'daily'
-  dayOfWeek: integer('day_of_week'), // 0-6 for Sunday-Saturday
-  timeOfDay: text('time_of_day').notNull(), // HH:MM format
+  scheduleType: text('schedule_type').notNull(),
+  dayOfWeek: integer('day_of_week'),
+  timeOfDay: text('time_of_day').notNull(),
   enabled: boolean('enabled').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
@@ -90,10 +99,10 @@ export const batchScans = pgTable('batch_scans', {
   id: uuid('id').primaryKey().defaultRandom(),
   deviceId: text('device_id').notNull(),
   batchName: text('batch_name').notNull(),
-  status: text('status').notNull().default('in_progress'), // 'in_progress' or 'completed'
+  status: text('status').notNull().default('in_progress'),
   itemCount: integer('item_count').default(0),
   storeId: uuid('store_id').references(() => stores.id, { onDelete: 'set null' }),
-  createdByMemberId: uuid('created_by_member_id').references(() => members.id, { onDelete: 'set null' }),
+  createdByMemberId: uuid('created_by_member_id').references(() => storeMembers.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });

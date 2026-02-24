@@ -22,20 +22,25 @@ function calculateStatus(expiryDateStr: string): 'fresh' | 'expiring' | 'expired
 }
 
 export function register(app: App, fastify: FastifyInstance) {
-  // GET /api/expiry-batches - Get expiry batches for store
+  // GET /api/stores/:storeId/expiry-batches - Get expiry batches for store
   fastify.get<{
-    Querystring: { storeId: string; status?: string };
+    Params: { storeId: string };
+    Querystring: { status?: string };
   }>(
-    '/api/expiry-batches',
+    '/api/stores/:storeId/expiry-batches',
     {
       schema: {
         description: 'Get expiry batches for store',
         tags: ['expiry-batches'],
-        querystring: {
+        params: {
           type: 'object',
-          required: ['storeId'],
           properties: {
             storeId: { type: 'string' },
+          },
+        },
+        querystring: {
+          type: 'object',
+          properties: {
             status: { type: 'string', enum: ['all', 'fresh', 'expiring', 'expired'] },
           },
         },
@@ -63,7 +68,8 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { storeId, status } = request.query;
+      const { storeId } = request.params;
+      const { status } = request.query;
       app.logger.info({ storeId, status }, 'Fetching expiry batches');
 
       try {
@@ -105,10 +111,10 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   );
 
-  // POST /api/expiry-batches - Create new expiry batch
+  // POST /api/stores/:storeId/expiry-batches - Create new expiry batch
   fastify.post<{
+    Params: { storeId: string };
     Body: {
-      storeId: string;
       barcode: string;
       expiryDate: string;
       quantity: number;
@@ -116,16 +122,21 @@ export function register(app: App, fastify: FastifyInstance) {
       note?: string;
     };
   }>(
-    '/api/expiry-batches',
+    '/api/stores/:storeId/expiry-batches',
     {
       schema: {
         description: 'Create new expiry batch',
         tags: ['expiry-batches'],
-        body: {
+        params: {
           type: 'object',
-          required: ['storeId', 'barcode', 'expiryDate', 'quantity', 'addedByMemberId'],
           properties: {
             storeId: { type: 'string' },
+          },
+        },
+        body: {
+          type: 'object',
+          required: ['barcode', 'expiryDate', 'quantity', 'addedByMemberId'],
+          properties: {
             barcode: { type: 'string' },
             expiryDate: { type: 'string' },
             quantity: { type: 'integer' },
@@ -151,7 +162,8 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { storeId, barcode, expiryDate, quantity, addedByMemberId, note } = request.body;
+      const { storeId } = request.params;
+      const { barcode, expiryDate, quantity, addedByMemberId, note } = request.body;
       app.logger.info({ storeId, barcode, expiryDate, quantity }, 'Creating expiry batch');
 
       try {
@@ -276,12 +288,11 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   );
 
-  // DELETE /api/expiry-batches/:id - Delete expiry batch
+  // DELETE /api/stores/:storeId/expiry-batches/:id - Delete expiry batch
   fastify.delete<{
-    Params: { id: string };
-    Querystring: { storeId: string };
+    Params: { storeId: string; id: string };
   }>(
-    '/api/expiry-batches/:id',
+    '/api/stores/:storeId/expiry-batches/:id',
     {
       schema: {
         description: 'Delete expiry batch',
@@ -289,14 +300,8 @@ export function register(app: App, fastify: FastifyInstance) {
         params: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-          },
-        },
-        querystring: {
-          type: 'object',
-          required: ['storeId'],
-          properties: {
             storeId: { type: 'string' },
+            id: { type: 'string' },
           },
         },
         response: {
@@ -310,8 +315,7 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-      const { storeId } = request.query;
+      const { id, storeId } = request.params;
       app.logger.info({ id, storeId }, 'Deleting expiry batch');
 
       try {
