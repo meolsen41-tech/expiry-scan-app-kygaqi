@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "expiryscan",
@@ -63,7 +64,8 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://y8zpz2rph3wktgcfa7a5aashyuprnsev.app.specular.dev"
+      "supabaseUrl": "https://orzzjwgteknzqmymampw.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yenpqd2d0ZWtuenFteW1hbXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NzI5OTYsImV4cCI6MjA4NzU0ODk5Nn0.BP32iXVO98dvYE_5UFIwxR1PiFiFkimnjAkNZO9r0yw"
     }
   }
 }

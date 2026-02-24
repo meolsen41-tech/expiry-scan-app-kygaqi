@@ -1,10 +1,11 @@
 
 import Constants from 'expo-constants';
 
-// Get backend URL from app.json configuration
-export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
+// Get Supabase configuration from app.json
+export const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl || 'https://orzzjwgteknzqmymampw.supabase.co';
+export const SUPABASE_ANON_KEY = Constants.expoConfig?.extra?.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yenpqd2d0ZWtuenFteW1hbXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NzI5OTYsImV4cCI6MjA4NzU0ODk5Nn0.BP32iXVO98dvYE_5UFIwxR1PiFiFkimnjAkNZO9r0yw';
 
-console.log('[API] Backend URL:', BACKEND_URL);
+console.log('[API] Supabase URL:', SUPABASE_URL);
 
 /**
  * Generic API call wrapper with error handling
@@ -13,7 +14,7 @@ async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${BACKEND_URL}${endpoint}`;
+  const url = `${SUPABASE_URL}/functions/v1${endpoint}`;
   console.log(`[API] ${options.method || 'GET'} ${url}`);
 
   try {
@@ -21,6 +22,8 @@ async function apiCall<T>(
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         ...options.headers,
       },
     });
@@ -98,7 +101,7 @@ export async function apiDeleteWithBody<T>(endpoint: string, data: any): Promise
  * Upload image helper (multipart/form-data)
  */
 export async function uploadImage(imageUri: string): Promise<{ url: string; filename: string }> {
-  const url = `${BACKEND_URL}/api/upload/product-image`;
+  const url = `${SUPABASE_URL}/functions/v1/upload-api`;
   console.log(`[API] POST ${url} (image upload)`);
 
   const formData = new FormData();
@@ -119,7 +122,8 @@ export async function uploadImage(imageUri: string): Promise<{ url: string; file
       method: 'POST',
       body: formData,
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
     });
 
@@ -204,11 +208,11 @@ export interface ProductStats extends ExpiryBatchStats {
 
 /**
  * Look up product by barcode
- * GET /api/products/:barcode
+ * GET /products-api/:barcode
  */
 export async function getProductByBarcode(barcode: string): Promise<Product | null> {
   try {
-    return await apiGet<Product>(`/api/products/${barcode}`);
+    return await apiGet<Product>(`/products-api/${barcode}`);
   } catch (error: any) {
     // Return null if product not found (404)
     if (error.message?.includes('404') || error.message?.includes('not found')) {
@@ -220,34 +224,34 @@ export async function getProductByBarcode(barcode: string): Promise<Product | nu
 
 /**
  * Create a new product
- * POST /api/products
+ * POST /products-api
  */
 export async function createProduct(data: {
   barcode: string;
   name?: string;
 }): Promise<Product> {
-  return apiPost<Product>('/api/products', data);
+  return apiPost<Product>('/products-api', data);
 }
 
 /**
  * Update product name
- * PUT /api/products/:barcode
+ * PUT /products-api/:barcode
  */
 export async function updateProduct(barcode: string, data: { name: string }): Promise<Product> {
-  return apiPut<Product>(`/api/products/${barcode}`, data);
+  return apiPut<Product>(`/products-api/${barcode}`, data);
 }
 
 /**
  * Get all images for a product
- * GET /api/products/:barcode/images
+ * GET /products-api/:barcode/images
  */
 export async function getProductImages(barcode: string): Promise<ProductImage[]> {
-  return apiGet<ProductImage[]>(`/api/products/${barcode}/images`);
+  return apiGet<ProductImage[]>(`/products-api/${barcode}/images`);
 }
 
 /**
  * Upload a new image for a product
- * POST /api/products/:barcode/images
+ * POST /products-api/:barcode/images
  */
 export async function uploadProductImage(
   barcode: string,
@@ -255,7 +259,7 @@ export async function uploadProductImage(
   storeId: string,
   memberId: string
 ): Promise<ProductImage> {
-  return apiPost<ProductImage>(`/api/products/${barcode}/images`, {
+  return apiPost<ProductImage>(`/products-api/${barcode}/images`, {
     imageUrl,
     storeId,
     memberId,
@@ -264,7 +268,7 @@ export async function uploadProductImage(
 
 /**
  * Get expiry batches for a store
- * GET /api/stores/:storeId/expiry-batches?status=xxx
+ * GET /expiry-batches-api/:storeId?status=xxx
  */
 export async function getExpiryBatches(params: {
   store_id: string;
@@ -275,14 +279,14 @@ export async function getExpiryBatches(params: {
     queryParams.append('status', params.status);
   }
   const query = queryParams.toString();
-  const endpoint = `/api/stores/${encodeURIComponent(params.store_id)}/expiry-batches${query ? `?${query}` : ''}`;
+  const endpoint = `/expiry-batches-api/${encodeURIComponent(params.store_id)}${query ? `?${query}` : ''}`;
   console.log(`[API] getExpiryBatches endpoint: ${endpoint}`);
   return apiGet<ExpiryBatch[]>(endpoint);
 }
 
 /**
  * Create a new expiry batch
- * POST /api/stores/:storeId/expiry-batches
+ * POST /expiry-batches-api/:storeId
  */
 export async function createExpiryBatch(data: {
   store_id: string;
@@ -293,7 +297,7 @@ export async function createExpiryBatch(data: {
   note?: string;
 }): Promise<ExpiryBatch> {
   console.log(`[API] createExpiryBatch for store: ${data.store_id}`);
-  return apiPost<ExpiryBatch>(`/api/stores/${encodeURIComponent(data.store_id)}/expiry-batches`, {
+  return apiPost<ExpiryBatch>(`/expiry-batches-api/${encodeURIComponent(data.store_id)}`, {
     barcode: data.barcode,
     expiryDate: data.expiry_date,
     quantity: data.quantity,
@@ -304,7 +308,7 @@ export async function createExpiryBatch(data: {
 
 /**
  * Update an expiry batch
- * PUT /api/expiry-batches/:id
+ * PUT /expiry-batches/:id
  */
 export async function updateExpiryBatch(
   id: string,
@@ -314,7 +318,7 @@ export async function updateExpiryBatch(
     note?: string;
   }
 ): Promise<ExpiryBatch> {
-  return apiPut<ExpiryBatch>(`/api/expiry-batches/${id}`, {
+  return apiPut<ExpiryBatch>(`/expiry-batches/${id}`, {
     storeId: data.store_id,
     quantity: data.quantity,
     note: data.note,
@@ -323,19 +327,19 @@ export async function updateExpiryBatch(
 
 /**
  * Delete an expiry batch
- * DELETE /api/stores/:storeId/expiry-batches/:id
+ * DELETE /expiry-batches-api/:storeId/:id
  */
 export async function deleteExpiryBatch(id: string, storeId: string): Promise<{ success: boolean }> {
   console.log(`[API] deleteExpiryBatch id=${id} storeId=${storeId}`);
-  return apiDelete<{ success: boolean }>(`/api/stores/${encodeURIComponent(storeId)}/expiry-batches/${id}`);
+  return apiDelete<{ success: boolean }>(`/expiry-batches-api/${encodeURIComponent(storeId)}/${id}`);
 }
 
 /**
  * Get expiry batch statistics for a store
- * GET /api/expiry-batches/stats?storeId=xxx
+ * GET /expiry-batches-api/stats/:storeId
  */
 export async function getExpiryBatchStats(storeId: string): Promise<ExpiryBatchStats> {
-  return apiGet<ExpiryBatchStats>(`/api/expiry-batches/stats?storeId=${encodeURIComponent(storeId)}`);
+  return apiGet<ExpiryBatchStats>(`/expiry-batches-api/stats/${encodeURIComponent(storeId)}`);
 }
 
 // ============================================
