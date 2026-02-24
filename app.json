@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "Expiry Scan",
@@ -64,7 +63,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://yf2jn49tsq3c3ucam6esjarj9eh5g3xq.app.specular.dev"
+      "backendUrl": "https://w3f43t2kmtyuxwjrwvs9umtzbabawtxe.app.specular.dev"
     }
   }
 }
