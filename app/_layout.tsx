@@ -18,7 +18,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { getCurrentStore, getStoreMembers, type CurrentStore, type Member } from "@/utils/stores";
-import { getDeviceId } from "@/utils/deviceId";
+
 // Note: Error logging is auto-initialized via index.ts import
 
 // ============================================================
@@ -55,11 +55,17 @@ function StoreProvider({ children }: { children: React.ReactNode }) {
     try {
       const deviceId = await getDeviceId();
       const store = await getCurrentStore(deviceId);
-      setCurrentStore(store);
       if (store) {
         const storeMembers = await getStoreMembers(store.id);
         setMembers(storeMembers);
+        // Find the current member's ID by matching nickname
+        const currentMember = storeMembers.find((m: Member) => m.nickname === store.nickname);
+        const memberId = currentMember?.id;
+        console.log('[StoreContext] Store loaded:', { storeId: store.id, memberId, memberCount: storeMembers.length });
+        setCurrentStore({ ...store, memberId, members: storeMembers });
       } else {
+        console.log('[StoreContext] No store linked for this device');
+        setCurrentStore(null);
         setMembers([]);
       }
     } catch (error) {

@@ -7,7 +7,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { getProductByBarcode, createProductEntry, uploadImage } from '@/utils/api';
+import { getProductByBarcode, createProduct, uploadProductImage, createExpiryBatch, uploadImage, getProductImages } from '@/utils/api';
 import Modal from '@/components/ui/Modal';
 import { useStore } from '@/app/_layout';
 
@@ -18,16 +18,15 @@ export default function ScannerScreen() {
   const [scanned, setScanned] = useState(false);
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
-  const [category, setCategory] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
   const [quantity, setQuantity] = useState('1');
-  const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
+  const [allImages, setAllImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [showOptionalFields, setShowOptionalFields] = useState(false);
+  const [needsProductInfo, setNeedsProductInfo] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     title: '',
@@ -54,14 +53,25 @@ export default function ScannerScreen() {
       const product = await getProductByBarcode(data);
       if (product) {
         console.log('ScannerScreen: Product found:', product);
-        setProductName(product.name);
-        setCategory(product.category || '');
-        setImageUrl(product.imageUrl || null);
+        setProductName(product.name || '');
+        setPrimaryImageUrl(product.primaryImageUrl || null);
+        setNeedsProductInfo(!product.name || !product.primaryImageUrl);
+        
+        // Fetch all images for this product
+        try {
+          const images = await getProductImages(data);
+          setAllImages(images);
+          console.log('ScannerScreen: Product images loaded:', images.length);
+        } catch (error) {
+          console.log('ScannerScreen: No images found for product');
+        }
       } else {
         console.log('ScannerScreen: Product not found, manual entry required');
+        setNeedsProductInfo(true);
       }
     } catch (error) {
       console.error('ScannerScreen: Error looking up product:', error);
+      setNeedsProductInfo(true);
     } finally {
       setLoading(false);
     }
@@ -103,51 +113,94 @@ export default function ScannerScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!barcode || !productName || !expirationDate) {
+    // Validate required fields
+    if (!barcode || !expirationDate || !quantity) {
       console.log('ScannerScreen: Missing required fields');
       setModalConfig({
         title: 'Missing Information',
-        message: 'Please fill in all required fields: Barcode, Product Name, and Expiration Date.',
+        message: 'Please fill in: Barcode, Expiration Date, and Quantity.',
         type: 'warning',
       });
       setModalVisible(true);
       return;
     }
 
-    console.log('ScannerScreen: Submitting product entry');
+    // Check if store is linked
+    if (!currentStore?.id) {
+      console.log('ScannerScreen: No store linked');
+      setModalConfig({
+        title: 'No Store Linked',
+        message: 'Please link to a store in the Butikk tab before adding products.',
+        type: 'warning',
+      });
+      setModalVisible(true);
+      return;
+    }
+
+    // If product needs info (name or image), validate those fields
+    if (needsProductInfo && (!productName || !imageUri)) {
+      console.log('ScannerScreen: Product needs name and image');
+      setModalConfig({
+        title: 'Product Information Required',
+        message: 'This is a new product. Please provide a name and take/upload a photo.',
+        type: 'warning',
+      });
+      setModalVisible(true);
+      return;
+    }
+
+    console.log('ScannerScreen: Submitting expiry batch');
     setLoading(true);
 
     try {
-      // Upload image if selected
-      let uploadedImageUrl = imageUrl;
-      if (imageUri) {
-        console.log('ScannerScreen: Uploading image');
-        const uploadResult = await uploadImage(imageUri);
-        uploadedImageUrl = uploadResult.url;
-        console.log('ScannerScreen: Image uploaded:', uploadedImageUrl);
+      // Step 1: Create or update product if needed
+      if (needsProductInfo) {
+        console.log('ScannerScreen: Creating/updating product');
+        
+        // Upload image first
+        let uploadedImageUrl = '';
+        if (imageUri) {
+          console.log('ScannerScreen: Uploading image');
+          const uploadResult = await uploadImage(imageUri);
+          uploadedImageUrl = uploadResult.url;
+          console.log('ScannerScreen: Image uploaded:', uploadedImageUrl);
+        }
+
+        // Create product if it doesn't exist
+        try {
+          await createProduct({
+            barcode,
+            name: productName,
+          });
+          console.log('ScannerScreen: Product created');
+        } catch (error) {
+          console.log('ScannerScreen: Product might already exist, continuing...');
+        }
+
+        // Upload product image
+        if (uploadedImageUrl && currentStore?.id) {
+          const memberId = currentStore.memberId || currentStore.id;
+          await uploadProductImage(barcode, uploadedImageUrl, currentStore.id, memberId);
+          console.log('ScannerScreen: Product image uploaded');
+        }
       }
 
-      // Create product entry (include storeId and memberId if linked to a store)
-      const entry = await createProductEntry({
+      // Step 2: Create expiry batch
+      const memberId = currentStore.memberId || currentStore.id;
+      const batch = await createExpiryBatch({
+        store_id: currentStore.id,
         barcode,
-        productName,
-        category: category || undefined,
-        expirationDate,
+        expiry_date: expirationDate,
         quantity: parseInt(quantity) || 1,
-        location: location || undefined,
-        notes: notes || undefined,
-        imageUrl: uploadedImageUrl || undefined,
-        storeId: currentStore?.id || undefined,
-        createdByMemberId: currentStore?.memberId || undefined,
+        added_by_member_id: memberId,
+        note: notes || undefined,
       });
-      console.log('[ScannerScreen] Store context:', { storeId: currentStore?.id, memberId: currentStore?.memberId });
-
-      console.log('ScannerScreen: Product entry created:', entry);
+      console.log('ScannerScreen: Expiry batch created:', batch);
       
       // Show success message and navigate back
       setModalConfig({
         title: 'Success!',
-        message: 'Product has been saved successfully.',
+        message: 'Product expiry batch has been saved successfully.',
         type: 'success',
       });
       setModalVisible(true);
@@ -157,10 +210,10 @@ export default function ScannerScreen() {
         router.back();
       }, 1500);
     } catch (error) {
-      console.error('ScannerScreen: Error creating product entry:', error);
+      console.error('ScannerScreen: Error creating expiry batch:', error);
       setModalConfig({
         title: 'Error',
-        message: 'Failed to save product. Please try again.',
+        message: error instanceof Error ? error.message : 'Failed to save product. Please try again.',
         type: 'error',
       });
       setModalVisible(true);
@@ -174,15 +227,14 @@ export default function ScannerScreen() {
     setScanned(false);
     setBarcode('');
     setProductName('');
-    setCategory('');
     setExpirationDate('');
     setQuantity('1');
-    setLocation('');
     setNotes('');
     setImageUri(null);
-    setImageUrl(null);
+    setPrimaryImageUrl(null);
+    setAllImages([]);
     setShowForm(false);
-    setShowOptionalFields(false);
+    setNeedsProductInfo(false);
   };
 
   if (!permission) {
@@ -276,17 +328,71 @@ export default function ScannerScreen() {
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Product Name *</Text>
-              <TextInput
-                style={styles.input}
-                value={productName}
-                onChangeText={setProductName}
-                placeholder="Enter product name"
-                placeholderTextColor={colors.textSecondary}
-                editable={!loading}
-              />
-            </View>
+            {needsProductInfo && (
+              <>
+                <View style={styles.infoBox}>
+                  <IconSymbol ios_icon_name="info.circle" android_material_icon_name="info" size={20} color={colors.primary} />
+                  <Text style={styles.infoText}>
+                    This is a new product. Please provide a name and photo.
+                  </Text>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Product Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={productName}
+                    onChangeText={setProductName}
+                    placeholder="Enter product name"
+                    placeholderTextColor={colors.textSecondary}
+                    editable={!loading}
+                  />
+                </View>
+
+                <View style={styles.imageButtons}>
+                  <TouchableOpacity style={styles.imageButton} onPress={handleTakePhoto} disabled={loading}>
+                    <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera" size={24} color={colors.primary} />
+                    <Text style={styles.imageButtonText}>Take Photo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.imageButton} onPress={handlePickImage} disabled={loading}>
+                    <IconSymbol ios_icon_name="photo.fill" android_material_icon_name="image" size={24} color={colors.primary} />
+                    <Text style={styles.imageButtonText}>Choose Photo</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {imageUri && (
+                  <View style={styles.imagePreview}>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={styles.previewImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                )}
+              </>
+            )}
+
+            {!needsProductInfo && productName && (
+              <View style={styles.productInfo}>
+                <Text style={styles.productInfoLabel}>Product:</Text>
+                <Text style={styles.productInfoValue}>{productName}</Text>
+              </View>
+            )}
+
+            {!needsProductInfo && primaryImageUrl && (
+              <View style={styles.imagePreview}>
+                <Image
+                  source={{ uri: primaryImageUrl }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+                {allImages.length > 1 && (
+                  <View style={styles.imageCount}>
+                    <Text style={styles.imageCountText}>+{allImages.length - 1} more</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Expiration Date *</Text>
@@ -300,103 +406,39 @@ export default function ScannerScreen() {
               />
             </View>
 
-            {(imageUri || imageUrl) && (
-              <View style={styles.imagePreview}>
-                <Image
-                  source={{ uri: imageUri || imageUrl || undefined }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                />
-              </View>
-            )}
-
-            <View style={styles.imageButtons}>
-              <TouchableOpacity style={styles.imageButton} onPress={handleTakePhoto} disabled={loading}>
-                <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera" size={24} color={colors.primary} />
-                <Text style={styles.imageButtonText}>Take Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.imageButton} onPress={handlePickImage} disabled={loading}>
-                <IconSymbol ios_icon_name="photo.fill" android_material_icon_name="image" size={24} color={colors.primary} />
-                <Text style={styles.imageButtonText}>Choose Photo</Text>
-              </TouchableOpacity>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quantity *</Text>
+              <TextInput
+                style={styles.input}
+                value={quantity}
+                onChangeText={setQuantity}
+                placeholder="1"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+                editable={!loading}
+              />
             </View>
 
-            <TouchableOpacity
-              style={styles.optionalToggle}
-              onPress={() => setShowOptionalFields(!showOptionalFields)}
-            >
-              <Text style={styles.optionalToggleText}>
-                {showOptionalFields ? 'Hide' : 'Show'} Optional Fields
-              </Text>
-              <IconSymbol
-                ios_icon_name={showOptionalFields ? 'chevron.up' : 'chevron.down'}
-                android_material_icon_name={showOptionalFields ? 'expand-less' : 'expand-more'}
-                size={20}
-                color={colors.primary}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Note (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Additional notes about this batch"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                editable={!loading}
               />
-            </TouchableOpacity>
-
-            {showOptionalFields && (
-              <>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Category</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={category}
-                    onChangeText={setCategory}
-                    placeholder="e.g., Dairy, Meat, Produce"
-                    placeholderTextColor={colors.textSecondary}
-                    editable={!loading}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Quantity</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    placeholder="1"
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    editable={!loading}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Location</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={location}
-                    onChangeText={setLocation}
-                    placeholder="e.g., Shelf A3, Cooler 2"
-                    placeholderTextColor={colors.textSecondary}
-                    editable={!loading}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Notes</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="Additional notes"
-                    placeholderTextColor={colors.textSecondary}
-                    multiline
-                    numberOfLines={3}
-                    editable={!loading}
-                  />
-                </View>
-              </>
-            )}
+            </View>
           </View>
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.buttonDisabled]}
               onPress={handleSubmit}
-              disabled={loading || !barcode || !productName || !expirationDate}
+              disabled={loading || !barcode || (needsProductInfo && (!productName || !imageUri)) || !expirationDate}
             >
               <Text style={styles.submitButtonText}>
                 {loading ? 'Saving...' : 'Save Product'}
@@ -633,5 +675,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundAlt,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+  },
+  productInfo: {
+    backgroundColor: colors.backgroundAlt,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  productInfoLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  productInfoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  imageCount: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  imageCountText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

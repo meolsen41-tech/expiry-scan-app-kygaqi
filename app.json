@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Expiry Scan",
-    "slug": "expiry-scan",
+    "slug": "Expiry Scan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -57,7 +57,7 @@
         }
       ]
     ],
-    "scheme": "expiry-scan",
+    "scheme": "Expiry Scan",
     "experiments": {
       "typedRoutes": true
     },

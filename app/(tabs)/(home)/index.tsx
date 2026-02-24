@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
-import { getProductStats, getProductEntries, type ProductEntry, type ProductStats } from "@/utils/api";
+import { getExpiryBatchStats, getExpiryBatches, type ExpiryBatch, type ExpiryBatchStats } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -10,8 +10,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useStore } from "@/app/_layout";
 
 export default function HomeScreen() {
-  const [stats, setStats] = useState<ProductStats | null>(null);
-  const [recentEntries, setRecentEntries] = useState<ProductEntry[]>([]);
+  const [stats, setStats] = useState<ExpiryBatchStats | null>(null);
+  const [recentEntries, setRecentEntries] = useState<ExpiryBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { t } = useLanguage();
@@ -19,17 +19,26 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     console.log('[HomeScreen] Loading data', { storeId: currentStore?.id });
+    
+    if (!currentStore?.id) {
+      console.log('[HomeScreen] No store linked, skipping data load');
+      setStats({ total: 0, fresh: 0, expiring: 0, expired: 0 });
+      setRecentEntries([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const [statsData, entriesData] = await Promise.all([
-        getProductStats(),
-        getProductEntries(currentStore?.id || undefined),
+        getExpiryBatchStats(currentStore.id),
+        getExpiryBatches({ store_id: currentStore.id, status: 'all' }),
       ]);
       
       setStats(statsData);
       // Get 5 most recent entries
       const sorted = entriesData.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
       );
       setRecentEntries(sorted.slice(0, 5));
       
@@ -39,7 +48,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentStore?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,7 +85,7 @@ export default function HomeScreen() {
     switch (status) {
       case 'fresh':
         return '#10B981';
-      case 'expiring_soon':
+      case 'expiring':
         return '#F59E0B';
       case 'expired':
         return '#EF4444';
@@ -89,7 +98,7 @@ export default function HomeScreen() {
     switch (status) {
       case 'fresh':
         return t('status.fresh');
-      case 'expiring_soon':
+      case 'expiring':
         return t('status.expiringSoon');
       case 'expired':
         return t('status.expired');
@@ -105,7 +114,7 @@ export default function HomeScreen() {
 
   const totalProducts = stats?.total || 0;
   const freshCount = stats?.fresh || 0;
-  const expiringSoonCount = stats?.expiringSoon || 0;
+  const expiringSoonCount = stats?.expiring || 0;
   const expiredCount = stats?.expired || 0;
 
   const titleText = t('home.title');
@@ -192,15 +201,17 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.recentList}>
               {recentEntries.map((entry) => {
-                const statusColor = getStatusColor(entry.status);
-                const statusText = getStatusText(entry.status);
-                const expirationDate = formatDate(entry.expirationDate);
+                const statusColor = getStatusColor(entry.status || 'fresh');
+                const statusText = getStatusText(entry.status || 'fresh');
+                const expirationDate = formatDate(entry.expiryDate);
+                const productName = entry.productName || entry.barcode;
+                const quantityText = `${entry.quantity}x`;
                 
                 return (
                   <View key={entry.id} style={styles.recentItem}>
                     <View style={styles.recentItemInfo}>
-                      <Text style={styles.recentItemName}>{entry.productName}</Text>
-                      <Text style={styles.recentItemDate}>{expiresText}: {expirationDate}</Text>
+                      <Text style={styles.recentItemName}>{productName}</Text>
+                      <Text style={styles.recentItemDate}>{expiresText}: {expirationDate} • {quantityText}</Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                       <Text style={styles.statusText}>{statusText}</Text>

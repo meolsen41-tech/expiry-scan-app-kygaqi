@@ -164,8 +164,8 @@ export default function BatchScanScreen() {
     try {
       const product = await getProductByBarcode(data);
       if (product) {
-        setProductName(product.name);
-        setCategory(product.category || '');
+        setProductName(product.name || '');
+        setCategory('');
       }
     } catch (error) {
       console.error('[BatchScan] Error looking up product:', error);

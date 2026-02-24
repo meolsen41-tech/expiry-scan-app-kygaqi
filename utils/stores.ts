@@ -25,6 +25,7 @@ export interface CurrentStore {
   role: 'owner' | 'member';
   nickname: string;
   memberId?: string;
+  members?: Array<{ id: string; nickname: string; role: string; joinedAt: string }>;
 }
 
 /**

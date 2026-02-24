@@ -5,16 +5,29 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { getProductEntries, deleteProductEntry, type ProductEntry } from '@/utils/api';
+import { getExpiryBatches, deleteExpiryBatch, type ExpiryBatch } from '@/utils/api';
+import { useStore } from '@/app/_layout';
 import Modal from '@/components/ui/Modal';
+
+interface GroupedBatch {
+  barcode: string;
+  expiryDate: string;
+  productName?: string;
+  primaryImageUrl?: string;
+  totalQuantity: number;
+  batches: ExpiryBatch[];
+  status?: 'fresh' | 'expiring' | 'expired';
+}
 
 export default function ProductsScreen() {
   const router = useRouter();
-  const [entries, setEntries] = useState<ProductEntry[]>([]);
-  const [filteredEntries, setFilteredEntries] = useState<ProductEntry[]>([]);
+  const { currentStore } = useStore();
+  const [entries, setEntries] = useState<ExpiryBatch[]>([]);
+  const [groupedEntries, setGroupedEntries] = useState<GroupedBatch[]>([]);
+  const [filteredEntries, setFilteredEntries] = useState<GroupedBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'fresh' | 'expiring_soon' | 'expired'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'fresh' | 'expiring' | 'expired'>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
@@ -27,18 +40,60 @@ export default function ProductsScreen() {
   useEffect(() => {
     console.log('ProductsScreen: Loading products');
     loadProducts();
-  }, []);
+  }, [currentStore?.id]);
+
+  useEffect(() => {
+    // Group entries by barcode + expiry_date
+    const grouped = groupBatches(entries);
+    setGroupedEntries(grouped);
+  }, [entries]);
 
   useEffect(() => {
     filterProducts();
-  }, [entries, searchQuery, filterStatus]);
+  }, [groupedEntries, searchQuery, filterStatus]);
+
+  const groupBatches = (batches: ExpiryBatch[]): GroupedBatch[] => {
+    const groups = new Map<string, GroupedBatch>();
+
+    batches.forEach(batch => {
+      const key = `${batch.barcode}_${batch.expiryDate}`;
+      
+      if (groups.has(key)) {
+        const existing = groups.get(key)!;
+        existing.totalQuantity += batch.quantity;
+        existing.batches.push(batch);
+      } else {
+        groups.set(key, {
+          barcode: batch.barcode,
+          expiryDate: batch.expiryDate,
+          productName: batch.productName,
+          primaryImageUrl: batch.primaryImageUrl,
+          totalQuantity: batch.quantity,
+          batches: [batch],
+          status: batch.status,
+        });
+      }
+    });
+
+    return Array.from(groups.values()).sort((a, b) => {
+      // Sort by expiry date (earliest first)
+      return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+    });
+  };
 
   const loadProducts = async () => {
-    console.log('ProductsScreen: Fetching product entries');
+    if (!currentStore?.id) {
+      console.log('ProductsScreen: No store linked');
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
+
+    console.log('ProductsScreen: Fetching expiry batches for store:', currentStore.id);
     setLoading(true);
     try {
-      const data = await getProductEntries();
-      console.log('ProductsScreen: Loaded', data.length, 'entries');
+      const data = await getExpiryBatches({ store_id: currentStore.id, status: 'all' });
+      console.log('ProductsScreen: Loaded', data.length, 'batches');
       setEntries(data);
     } catch (error) {
       console.error('ProductsScreen: Error loading products:', error);
@@ -48,7 +103,7 @@ export default function ProductsScreen() {
   };
 
   const filterProducts = () => {
-    let filtered = entries;
+    let filtered = groupedEntries;
 
     // Filter by status
     if (filterStatus !== 'all') {
@@ -59,48 +114,57 @@ export default function ProductsScreen() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(entry =>
-        entry.productName.toLowerCase().includes(query) ||
-        entry.barcode.includes(query) ||
-        entry.category?.toLowerCase().includes(query)
+        entry.productName?.toLowerCase().includes(query) ||
+        entry.barcode.includes(query)
       );
     }
 
     setFilteredEntries(filtered);
   };
 
-  const confirmDelete = (id: string, productName: string) => {
+  const confirmDelete = (group: GroupedBatch) => {
+    const productName = group.productName || group.barcode;
+    const batchCount = group.batches.length;
     setModalConfig({
-      title: 'Delete Product',
-      message: `Are you sure you want to delete "${productName}"? This action cannot be undone.`,
+      title: 'Delete Expiry Batch',
+      message: `Are you sure you want to delete ${batchCount} batch${batchCount > 1 ? 'es' : ''} of "${productName}" expiring on ${formatDate(group.expiryDate)}? This cannot be undone.`,
       type: 'warning',
-      onConfirm: () => handleDelete(id),
+      onConfirm: () => handleDelete(group),
     });
     setModalVisible(true);
   };
 
-  const handleDelete = async (id: string) => {
-    console.log('ProductsScreen: Deleting entry:', id);
+  const handleDelete = async (group: GroupedBatch) => {
+    if (!currentStore?.id) return;
+
+    console.log('ProductsScreen: Deleting batches:', group.batches.length);
     setModalVisible(false);
-    setDeletingId(id);
+    setDeletingId(group.barcode + group.expiryDate);
+    
     try {
-      await deleteProductEntry(id);
-      console.log('ProductsScreen: Entry deleted successfully');
+      // Delete all batches in this group
+      await Promise.all(
+        group.batches.map(batch => deleteExpiryBatch(batch.id, currentStore.id))
+      );
+      console.log('ProductsScreen: Batches deleted successfully');
+      
       // Remove from local state
-      setEntries(prev => prev.filter(entry => entry.id !== id));
+      const batchIds = group.batches.map(b => b.id);
+      setEntries(prev => prev.filter(entry => !batchIds.includes(entry.id)));
       
       // Show success message
       setModalConfig({
         title: 'Deleted',
-        message: 'Product has been deleted successfully.',
+        message: 'Expiry batch has been deleted successfully.',
         type: 'success',
         onConfirm: undefined,
       });
       setModalVisible(true);
     } catch (error) {
-      console.error('ProductsScreen: Error deleting entry:', error);
+      console.error('ProductsScreen: Error deleting batches:', error);
       setModalConfig({
         title: 'Error',
-        message: 'Failed to delete product. Please try again.',
+        message: 'Failed to delete expiry batch. Please try again.',
         type: 'error',
         onConfirm: undefined,
       });
@@ -111,15 +175,15 @@ export default function ProductsScreen() {
   };
 
   const getStatusColor = (status: string) => {
-    if (status === 'fresh') return colors.fresh;
-    if (status === 'expiring_soon') return colors.expiringSoon;
-    if (status === 'expired') return colors.expired;
+    if (status === 'fresh') return '#10B981';
+    if (status === 'expiring') return '#F59E0B';
+    if (status === 'expired') return '#EF4444';
     return colors.textSecondary;
   };
 
   const getStatusText = (status: string) => {
     if (status === 'fresh') return 'Fresh';
-    if (status === 'expiring_soon') return 'Expiring Soon';
+    if (status === 'expiring') return 'Expiring Soon';
     if (status === 'expired') return 'Expired';
     return status;
   };
@@ -186,7 +250,7 @@ export default function ProductsScreen() {
             onPress={() => setFilterStatus('all')}
           >
             <Text style={[styles.filterButtonText, filterStatus === 'all' && styles.filterButtonTextActive]}>
-              All ({entries.length})
+              All ({groupedEntries.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -194,15 +258,15 @@ export default function ProductsScreen() {
             onPress={() => setFilterStatus('fresh')}
           >
             <Text style={[styles.filterButtonText, filterStatus === 'fresh' && styles.filterButtonTextActive]}>
-              Fresh ({entries.filter(e => e.status === 'fresh').length})
+              Fresh ({groupedEntries.filter(e => e.status === 'fresh').length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'expiring_soon' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('expiring_soon')}
+            style={[styles.filterButton, filterStatus === 'expiring' && styles.filterButtonActive]}
+            onPress={() => setFilterStatus('expiring')}
           >
-            <Text style={[styles.filterButtonText, filterStatus === 'expiring_soon' && styles.filterButtonTextActive]}>
-              Expiring ({entries.filter(e => e.status === 'expiring_soon').length})
+            <Text style={[styles.filterButtonText, filterStatus === 'expiring' && styles.filterButtonTextActive]}>
+              Expiring ({groupedEntries.filter(e => e.status === 'expiring').length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -210,7 +274,7 @@ export default function ProductsScreen() {
             onPress={() => setFilterStatus('expired')}
           >
             <Text style={[styles.filterButtonText, filterStatus === 'expired' && styles.filterButtonTextActive]}>
-              Expired ({entries.filter(e => e.status === 'expired').length})
+              Expired ({groupedEntries.filter(e => e.status === 'expired').length})
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -233,35 +297,36 @@ export default function ProductsScreen() {
         </View>
       ) : (
         <ScrollView style={styles.listContainer} contentContainerStyle={styles.listContent}>
-          {filteredEntries.map((entry) => {
-            const statusColor = getStatusColor(entry.status);
-            const statusText = getStatusText(entry.status);
-            const formattedDate = formatDate(entry.expirationDate);
-            const daysUntil = getDaysUntilExpiration(entry.expirationDate);
-            const isDeleting = deletingId === entry.id;
+          {filteredEntries.map((group) => {
+            const statusColor = getStatusColor(group.status || 'fresh');
+            const statusText = getStatusText(group.status || 'fresh');
+            const formattedDate = formatDate(group.expiryDate);
+            const daysUntil = getDaysUntilExpiration(group.expiryDate);
+            const isDeleting = deletingId === (group.barcode + group.expiryDate);
+            const productName = group.productName || group.barcode;
 
             return (
-              <View key={entry.id} style={styles.productCard}>
-                {entry.imageUrl && (
-                  <Image source={{ uri: entry.imageUrl }} style={styles.productImage} resizeMode="cover" />
+              <View key={`${group.barcode}_${group.expiryDate}`} style={styles.productCard}>
+                {group.primaryImageUrl && (
+                  <Image source={{ uri: group.primaryImageUrl }} style={styles.productImage} resizeMode="cover" />
                 )}
                 <View style={styles.productInfo}>
                   <View style={styles.productHeader}>
                     <View style={styles.productTitleRow}>
                       <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                       <Text style={styles.productName} numberOfLines={1}>
-                        {entry.productName}
+                        {productName}
                       </Text>
                     </View>
                     <TouchableOpacity
                       style={styles.deleteButton}
-                      onPress={() => confirmDelete(entry.id, entry.productName)}
+                      onPress={() => confirmDelete(group)}
                       disabled={isDeleting}
                     >
                       {isDeleting ? (
-                        <ActivityIndicator size="small" color={colors.expired} />
+                        <ActivityIndicator size="small" color="#EF4444" />
                       ) : (
-                        <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={20} color={colors.expired} />
+                        <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={20} color="#EF4444" />
                       )}
                     </TouchableOpacity>
                   </View>
@@ -269,14 +334,8 @@ export default function ProductsScreen() {
                   <View style={styles.productDetails}>
                     <View style={styles.detailRow}>
                       <IconSymbol ios_icon_name="barcode" android_material_icon_name="qr-code" size={16} color={colors.textSecondary} />
-                      <Text style={styles.detailText}>{entry.barcode}</Text>
+                      <Text style={styles.detailText}>{group.barcode}</Text>
                     </View>
-                    {entry.category && (
-                      <View style={styles.detailRow}>
-                        <IconSymbol ios_icon_name="tag.fill" android_material_icon_name="label" size={16} color={colors.textSecondary} />
-                        <Text style={styles.detailText}>{entry.category}</Text>
-                      </View>
-                    )}
                     <View style={styles.detailRow}>
                       <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={16} color={colors.textSecondary} />
                       <Text style={styles.detailText}>
@@ -284,23 +343,17 @@ export default function ProductsScreen() {
                         {daysUntil >= 0 ? ` (${daysUntil} days)` : ` (${Math.abs(daysUntil)} days ago)`}
                       </Text>
                     </View>
-                    {entry.location && (
+                    <View style={styles.detailRow}>
+                      <IconSymbol ios_icon_name="inventory" android_material_icon_name="inventory" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>Total Quantity: {group.totalQuantity}</Text>
+                    </View>
+                    {group.batches.length > 1 && (
                       <View style={styles.detailRow}>
-                        <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={16} color={colors.textSecondary} />
-                        <Text style={styles.detailText}>{entry.location}</Text>
+                        <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="layers" size={16} color={colors.textSecondary} />
+                        <Text style={styles.detailText}>{group.batches.length} batches</Text>
                       </View>
                     )}
-                    <View style={styles.detailRow}>
-                      <IconSymbol ios_icon_name="number" android_material_icon_name="tag" size={16} color={colors.textSecondary} />
-                      <Text style={styles.detailText}>Quantity: {entry.quantity}</Text>
-                    </View>
                   </View>
-
-                  {entry.notes && (
-                    <View style={styles.notesContainer}>
-                      <Text style={styles.notesText}>{entry.notes}</Text>
-                    </View>
-                  )}
 
                   <View style={styles.statusBadgeContainer}>
                     <Text style={[styles.statusBadge, { color: statusColor }]}>{statusText}</Text>
