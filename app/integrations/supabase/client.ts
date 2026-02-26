@@ -10,8 +10,6 @@ const SUPABASE_PUBLISHABLE_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJscHdwaGpqcHNzbXdla3VnYWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDUwMzgsImV4cCI6MjA4NzY4MTAzOH0.4hlCE7u3WVZeqOadK-jELtnf5H51NyJ_ucuiMXq-0PQ";
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error('Missing Supabase env vars');
 }
 
 // Import the supabase client like this:
