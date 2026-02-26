@@ -9,8 +9,13 @@
       "distribution": "internal",
       "autoIncrement": true
     },
-    "production": {
-      "autoIncrement": true
+  	"production": {
+  "autoIncrement": true,
+  "env": {
+    "EXPO_PUBLIC_SUPABASE_URL": "https://blpwphjjpssmwekugain.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJscHdwaGpqcHNzbXdla3VnYWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDUwMzgsImV4cCI6MjA4NzY4MTAzOH0.4hlCE7u3WVZeqOadK-jELtnf5H51NyJ_ucuiMXq-0PQ."
+  }
+}
     }
   }
 }
