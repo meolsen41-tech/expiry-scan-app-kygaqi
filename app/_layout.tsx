@@ -112,7 +112,7 @@ function StoreProvider({ children }: { children: React.ReactNode }) {
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)", // Ensure any route can link back to `/`
+  initialRouteName: "index", // Start at root index which redirects to tabs
 };
 
 export default function RootLayout() {
@@ -175,9 +175,15 @@ export default function RootLayout() {
             <StoreProvider>
               <WidgetProvider>
                 <GestureHandlerRootView>
-                  <Stack>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    {/* Root index redirects to tabs */}
+                    <Stack.Screen name="index" />
                     {/* Main app with tabs */}
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="(tabs)" />
+                    {/* Settings screen */}
+                    <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: true, title: 'Settings' }} />
+                    {/* 404 screen */}
+                    <Stack.Screen name="+not-found" />
                   </Stack>
                   <SystemBars style={"auto"} />
                 </GestureHandlerRootView>
