@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from "react-native";
 import { getExpiryBatchStats, getExpiryBatches, type ExpiryBatch, type ExpiryBatchStats } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,13 +15,13 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { t } = useLanguage();
-  const { currentStore } = useStore();
+  const { currentStore, isLoading: storeLoading } = useStore();
 
   const loadData = useCallback(async () => {
     console.log('[HomeScreen] Loading data', { storeId: currentStore?.id });
     
     if (!currentStore?.id) {
-      console.log('[HomeScreen] No store linked, skipping data load');
+      console.log('[HomeScreen] No store linked, showing empty state');
       setStats({ total: 0, fresh: 0, expiring: 0, expired: 0 });
       setRecentEntries([]);
       setLoading(false);
@@ -45,6 +45,9 @@ export default function HomeScreen() {
       console.log('[HomeScreen] Data loaded:', { stats: statsData, recentCount: sorted.length });
     } catch (error) {
       console.error('[HomeScreen] Error loading data:', error);
+      // Set empty stats on error
+      setStats({ total: 0, fresh: 0, expiring: 0, expired: 0 });
+      setRecentEntries([]);
     } finally {
       setLoading(false);
     }
@@ -81,6 +84,11 @@ export default function HomeScreen() {
     router.push('/(tabs)/(home)/teams');
   };
 
+  const handleGoToStore = () => {
+    console.log('[HomeScreen] Navigate to store');
+    router.push('/(tabs)/butikk');
+  };
+
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'fresh':
@@ -112,6 +120,18 @@ export default function HomeScreen() {
     return date.toLocaleDateString();
   };
 
+  // Show loading spinner only during initial store load
+  if (storeLoading && !stats) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const totalProducts = stats?.total || 0;
   const freshCount = stats?.fresh || 0;
   const expiringSoonCount = stats?.expiring || 0;
@@ -133,6 +153,9 @@ export default function HomeScreen() {
   const noProductsSubtextText = t('home.noProductsSubtext');
   const expiresText = t('home.expires');
 
+  // Show message if no store is linked
+  const showNoStoreMessage = !currentStore;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -142,6 +165,19 @@ export default function HomeScreen() {
             <Text style={styles.subtitle}>{subtitleText}</Text>
           </View>
         </View>
+
+        {showNoStoreMessage && (
+          <View style={styles.noStoreCard}>
+            <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="warning" size={48} color={colors.primary} />
+            <Text style={styles.noStoreTitle}>No Store Linked</Text>
+            <Text style={styles.noStoreText}>
+              You need to create or join a store to start tracking products.
+            </Text>
+            <TouchableOpacity style={styles.goToStoreButton} onPress={handleGoToStore}>
+              <Text style={styles.goToStoreButtonText}>Go to Store Tab</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
@@ -233,6 +269,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingTop: Platform.OS === 'android' ? 48 : 0,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
   scrollView: {
     flex: 1,
   },
@@ -256,6 +302,41 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: colors.textSecondary,
+  },
+  noStoreCard: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+    padding: 24,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    gap: 12,
+  },
+  noStoreTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  noStoreText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  goToStoreButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+  },
+  goToStoreButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   statsContainer: {
     flexDirection: 'row',
