@@ -7,7 +7,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { getProductByBarcode, createProduct, uploadProductImage, createExpiryBatch, uploadImage, getProductImages } from '@/utils/api';
+import { getProductByBarcode, createProduct, uploadProductImage, createExpiryBatch, uploadImage, getProductImages, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/utils/api';
 import Modal from '@/components/ui/Modal';
 import { useStore } from '@/app/_layout';
 
@@ -25,6 +25,7 @@ export default function ScannerScreen() {
   const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
   const [allImages, setAllImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [analyzingBBD, setAnalyzingBBD] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [needsProductInfo, setNeedsProductInfo] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -112,13 +113,106 @@ export default function ScannerScreen() {
     }
   };
 
+  const handleScanBBD = async () => {
+    console.log('ScannerScreen: Scanning BBD');
+    
+    // Take a photo
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const photoUri = result.assets[0].uri;
+    console.log('ScannerScreen: BBD photo taken:', photoUri);
+
+    setAnalyzingBBD(true);
+    setModalConfig({
+      title: 'Analyzing Date',
+      message: 'Reading the expiration date from the photo...',
+      type: 'info',
+    });
+    setModalVisible(true);
+
+    try {
+      // Create form data
+      const formData = new FormData();
+      const filename = photoUri.split('/').pop() || 'bbd.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      formData.append('image', {
+        uri: photoUri,
+        name: filename,
+        type,
+      } as any);
+
+      // Call the BBD analysis endpoint
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-bbd-image`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      const data = await response.json();
+      console.log('ScannerScreen: BBD analysis result:', data);
+
+      if (data.success && data.expiryDate) {
+        setExpirationDate(data.expiryDate);
+        setModalConfig({
+          title: 'Date Found!',
+          message: `Expiration date detected: ${data.expiryDate}`,
+          type: 'success',
+        });
+        setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 2000);
+      } else {
+        setModalConfig({
+          title: 'Date Not Found',
+          message: data.error || 'Could not read the date from the photo. Please enter it manually.',
+          type: 'warning',
+        });
+        setModalVisible(true);
+      }
+    } catch (error: any) {
+      console.error('ScannerScreen: Error analyzing BBD:', error);
+      setModalConfig({
+        title: 'Analysis Failed',
+        message: 'Failed to analyze the photo. Please enter the date manually.',
+        type: 'error',
+      });
+      setModalVisible(true);
+    } finally {
+      setAnalyzingBBD(false);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validate required fields
     if (!barcode || !expirationDate || !quantity) {
       console.log('ScannerScreen: Missing required fields');
       setModalConfig({
         title: 'Missing Information',
-        message: 'Please fill in: Barcode, Expiration Date, and Quantity.',
+        message: 'Please fill in: Barcode, Expiration Date (YYYY-MM), and Quantity.',
+        type: 'warning',
+      });
+      setModalVisible(true);
+      return;
+    }
+
+    // Validate date format (YYYY-MM)
+    const datePattern = /^\d{4}-\d{2}$/;
+    if (!datePattern.test(expirationDate)) {
+      console.log('ScannerScreen: Invalid date format');
+      setModalConfig({
+        title: 'Invalid Date Format',
+        message: 'Please enter the date in YYYY-MM format (e.g., 2024-12 for December 2024).',
         type: 'warning',
       });
       setModalVisible(true);
@@ -185,12 +279,14 @@ export default function ScannerScreen() {
         }
       }
 
-      // Step 2: Create expiry batch
+      // Step 2: Create expiry batch (convert YYYY-MM to YYYY-MM-01 for database)
       const memberId = currentStore.memberId || currentStore.id;
+      const fullDate = `${expirationDate}-01`; // Add day as 01 for database storage
+      
       const batch = await createExpiryBatch({
         store_id: currentStore.id,
         barcode,
-        expiry_date: expirationDate,
+        expiry_date: fullDate,
         quantity: parseInt(quantity) || 1,
         added_by_member_id: memberId,
         note: notes || undefined,
@@ -395,15 +491,35 @@ export default function ScannerScreen() {
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Expiration Date *</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Expiration Date (Month/Year) *</Text>
+                <TouchableOpacity 
+                  style={styles.scanBBDButton} 
+                  onPress={handleScanBBD}
+                  disabled={analyzingBBD || loading}
+                >
+                  <IconSymbol 
+                    ios_icon_name="camera.viewfinder" 
+                    android_material_icon_name="camera" 
+                    size={18} 
+                    color={colors.primary} 
+                  />
+                  <Text style={styles.scanBBDButtonText}>
+                    {analyzingBBD ? 'Analyzing...' : 'Scan BBD'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.input}
                 value={expirationDate}
                 onChangeText={setExpirationDate}
-                placeholder="YYYY-MM-DD"
+                placeholder="YYYY-MM (e.g., 2024-12)"
                 placeholderTextColor={colors.textSecondary}
-                editable={!loading}
+                editable={!loading && !analyzingBBD}
               />
+              <Text style={styles.helperText}>
+                Enter only month and year (e.g., 2024-12 for December 2024)
+              </Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -586,11 +702,39 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 8,
+  },
+  scanBBDButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  scanBBDButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  helperText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   input: {
     backgroundColor: colors.card,
