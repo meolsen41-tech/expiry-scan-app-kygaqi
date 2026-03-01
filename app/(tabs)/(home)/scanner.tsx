@@ -232,11 +232,11 @@ export default function ScannerScreen() {
     }
 
     // If product needs info (name or image), validate those fields
-    if (needsProductInfo && (!productName || !imageUri)) {
-      console.log('ScannerScreen: Product needs name and image');
+    if (needsProductInfo && !productName) {
+      console.log('ScannerScreen: Product needs name');
       setModalConfig({
-        title: 'Product Information Required',
-        message: 'This is a new product. Please provide a name and take/upload a photo.',
+        title: 'Product Name Required',
+        message: 'This is a new product. Please provide a product name.',
         type: 'warning',
       });
       setModalVisible(true);
@@ -247,42 +247,70 @@ export default function ScannerScreen() {
     setLoading(true);
 
     try {
-      // Step 1: Create or update product if needed
-      if (needsProductInfo) {
-        console.log('ScannerScreen: Creating/updating product');
-        
-        // Upload image first
-        let uploadedImageUrl = '';
-        if (imageUri) {
+      // Step 1: Upload image if provided (optional for new products)
+      let uploadedImageUrl = '';
+      if (imageUri) {
+        try {
           console.log('ScannerScreen: Uploading image');
           const uploadResult = await uploadImage(imageUri);
           uploadedImageUrl = uploadResult.url;
           console.log('ScannerScreen: Image uploaded:', uploadedImageUrl);
+        } catch (uploadError) {
+          console.error('ScannerScreen: Image upload failed:', uploadError);
+          // Continue without image - it's optional
+          setModalConfig({
+            title: 'Image Upload Failed',
+            message: 'Could not upload image, but continuing with product registration.',
+            type: 'warning',
+          });
+          setModalVisible(true);
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
+      }
 
-        // Create product if it doesn't exist
+      // Step 2: Create product if needed (with name)
+      if (needsProductInfo && productName) {
         try {
+          console.log('ScannerScreen: Creating product with name:', productName);
           await createProduct({
             barcode,
             name: productName,
           });
           console.log('ScannerScreen: Product created');
-        } catch (error) {
-          console.log('ScannerScreen: Product might already exist, continuing...');
+        } catch (productError: any) {
+          // If product already exists, that's fine - continue
+          if (!productError.message?.includes('already exists') && !productError.message?.includes('duplicate')) {
+            console.error('ScannerScreen: Product creation failed:', productError);
+            throw new Error(`Failed to create product: ${productError.message}`);
+          }
+          console.log('ScannerScreen: Product already exists, continuing...');
         }
 
-        // Upload product image
+        // Step 3: Upload product image if we have one
         if (uploadedImageUrl && currentStore?.id) {
-          const memberId = currentStore.memberId || currentStore.id;
-          await uploadProductImage(barcode, uploadedImageUrl, currentStore.id, memberId);
-          console.log('ScannerScreen: Product image uploaded');
+          try {
+            const memberId = currentStore.memberId || currentStore.id;
+            await uploadProductImage(barcode, uploadedImageUrl, currentStore.id, memberId);
+            console.log('ScannerScreen: Product image uploaded');
+          } catch (imageError) {
+            console.error('ScannerScreen: Product image upload failed:', imageError);
+            // Continue - image is optional
+          }
         }
       }
 
-      // Step 2: Create expiry batch (convert YYYY-MM to YYYY-MM-01 for database)
+      // Step 4: Create expiry batch (convert YYYY-MM to YYYY-MM-01 for database)
       const memberId = currentStore.memberId || currentStore.id;
       const fullDate = `${expirationDate}-01`; // Add day as 01 for database storage
       
+      console.log('ScannerScreen: Creating expiry batch with data:', {
+        store_id: currentStore.id,
+        barcode,
+        expiry_date: fullDate,
+        quantity: parseInt(quantity) || 1,
+        added_by_member_id: memberId,
+      });
+
       const batch = await createExpiryBatch({
         store_id: currentStore.id,
         barcode,
@@ -291,7 +319,7 @@ export default function ScannerScreen() {
         added_by_member_id: memberId,
         note: notes || undefined,
       });
-      console.log('ScannerScreen: Expiry batch created:', batch);
+      console.log('ScannerScreen: Expiry batch created successfully:', batch);
       
       // Show success message and navigate back
       setModalConfig({
@@ -305,11 +333,12 @@ export default function ScannerScreen() {
       setTimeout(() => {
         router.back();
       }, 1500);
-    } catch (error) {
-      console.error('ScannerScreen: Error creating expiry batch:', error);
+    } catch (error: any) {
+      console.error('ScannerScreen: Error in handleSubmit:', error);
+      const errorMessage = error?.message || 'Failed to save product. Please try again.';
       setModalConfig({
         title: 'Error',
-        message: error instanceof Error ? error.message : 'Failed to save product. Please try again.',
+        message: errorMessage,
         type: 'error',
       });
       setModalVisible(true);
@@ -429,7 +458,7 @@ export default function ScannerScreen() {
                 <View style={styles.infoBox}>
                   <IconSymbol ios_icon_name="info.circle" android_material_icon_name="info" size={20} color={colors.primary} />
                   <Text style={styles.infoText}>
-                    This is a new product. Please provide a name and photo.
+                    This is a new product. Please provide a name. Photo is optional but recommended.
                   </Text>
                 </View>
 
@@ -554,7 +583,7 @@ export default function ScannerScreen() {
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.buttonDisabled]}
               onPress={handleSubmit}
-              disabled={loading || !barcode || (needsProductInfo && (!productName || !imageUri)) || !expirationDate}
+              disabled={loading || !barcode || (needsProductInfo && !productName) || !expirationDate}
             >
               <Text style={styles.submitButtonText}>
                 {loading ? 'Saving...' : 'Save Product'}
