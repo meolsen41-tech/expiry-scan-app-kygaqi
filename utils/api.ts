@@ -473,3 +473,98 @@ export async function getProductStats(storeId?: string): Promise<ProductStats> {
     expiringSoon: stats.expiring,
   };
 }
+
+// ============================================
+// Daily Check API Methods
+// ============================================
+
+export interface DailyCheckSession {
+  id: string;
+  storeId: string;
+  startedByMemberId: string;
+  startedAt: string;
+  completedAt?: string;
+  status: 'in_progress' | 'completed';
+  warningDays: number;
+  totalChecked: number;
+  totalDiscounted: number;
+  totalSold: number;
+  totalDiscarded: number;
+  totalSkipped: number;
+}
+
+export interface DailyCheckProduct extends ExpiryBatch {
+  // Inherits all ExpiryBatch fields
+}
+
+export interface DailyCheckAction {
+  id: string;
+  sessionId: string;
+  expiryBatchId: string;
+  actionType: 'checked' | 'discounted' | 'sold' | 'discarded' | 'skipped';
+  performedByMemberId: string;
+  performedAt: string;
+}
+
+/**
+ * Start a new daily check session
+ * POST /daily-check-api/sessions
+ */
+export async function startDailyCheckSession(data: {
+  storeId: string;
+  memberId: string;
+  warningDays?: number;
+}): Promise<DailyCheckSession> {
+  console.log('[API] Starting daily check session:', data);
+  return apiPost<DailyCheckSession>('/daily-check-api/sessions', {
+    storeId: data.storeId,
+    memberId: data.memberId,
+    warningDays: data.warningDays || 7,
+  });
+}
+
+/**
+ * Get daily check sessions for a store
+ * GET /daily-check-api/sessions/:storeId
+ */
+export async function getDailyCheckSessions(storeId: string): Promise<DailyCheckSession[]> {
+  console.log('[API] Fetching daily check sessions for store:', storeId);
+  return apiGet<DailyCheckSession[]>(`/daily-check-api/sessions/${encodeURIComponent(storeId)}`);
+}
+
+/**
+ * Get products to check for a session
+ * GET /daily-check-api/sessions/:sessionId/products
+ */
+export async function getDailyCheckProducts(sessionId: string): Promise<DailyCheckProduct[]> {
+  console.log('[API] Fetching products for session:', sessionId);
+  return apiGet<DailyCheckProduct[]>(`/daily-check-api/sessions/${sessionId}/products`);
+}
+
+/**
+ * Record an action for a product in a session
+ * POST /daily-check-api/actions
+ */
+export async function recordDailyCheckAction(data: {
+  sessionId: string;
+  expiryBatchId: string;
+  actionType: 'checked' | 'discounted' | 'sold' | 'discarded' | 'skipped';
+  memberId: string;
+}): Promise<DailyCheckAction> {
+  console.log('[API] Recording daily check action:', data);
+  return apiPost<DailyCheckAction>('/daily-check-api/actions', {
+    sessionId: data.sessionId,
+    expiryBatchId: data.expiryBatchId,
+    actionType: data.actionType,
+    memberId: data.memberId,
+  });
+}
+
+/**
+ * Complete a daily check session
+ * PUT /daily-check-api/sessions/:sessionId/complete
+ */
+export async function completeDailyCheckSession(sessionId: string): Promise<DailyCheckSession> {
+  console.log('[API] Completing daily check session:', sessionId);
+  return apiPut<DailyCheckSession>(`/daily-check-api/sessions/${sessionId}/complete`, {});
+}

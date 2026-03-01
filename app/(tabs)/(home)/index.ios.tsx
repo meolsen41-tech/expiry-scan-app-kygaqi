@@ -84,6 +84,11 @@ export default function HomeScreen() {
     router.push('/(tabs)/(home)/teams');
   };
 
+  const handleDailyCheckPress = () => {
+    console.log('[HomeScreen] Navigate to daily check');
+    router.push('/(tabs)/(home)/daily-check');
+  };
+
   const handleGoToStore = () => {
     console.log('[HomeScreen] Navigate to store');
     router.push('/(tabs)/butikk');
@@ -147,6 +152,7 @@ export default function HomeScreen() {
   const batchScanText = t('home.batchScan');
   const notificationsText = t('home.notifications');
   const teamsText = t('home.teams');
+  const dailyCheckText = 'Daily Check';
   const recentScansText = t('home.recentScans');
   const viewAllText = t('home.viewAll');
   const noProductsText = t('home.noProducts');
@@ -205,6 +211,10 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <View style={styles.secondaryActions}>
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleDailyCheckPress}>
+              <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={24} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>{dailyCheckText}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryAction} onPress={handleBatchScanPress}>
               <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={24} color={colors.primary} />
               <Text style={styles.secondaryActionText}>{batchScanText}</Text>
@@ -212,10 +222,6 @@ export default function HomeScreen() {
             <TouchableOpacity style={styles.secondaryAction} onPress={handleNotificationsPress}>
               <IconSymbol ios_icon_name="bell.fill" android_material_icon_name="notifications" size={24} color={colors.primary} />
               <Text style={styles.secondaryActionText}>{notificationsText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryAction} onPress={handleTeamsPress}>
-              <IconSymbol ios_icon_name="person.3.fill" android_material_icon_name="group" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>{teamsText}</Text>
             </TouchableOpacity>
           </View>
         </View>
