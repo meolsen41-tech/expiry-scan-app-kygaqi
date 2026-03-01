@@ -119,7 +119,7 @@ export default function ScannerScreen() {
     // Take a photo
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
-      quality: 0.8,
+      quality: 0.5, // Reduced quality to avoid large images
     });
 
     if (result.canceled || !result.assets[0]) {
@@ -150,6 +150,8 @@ export default function ScannerScreen() {
         type,
       } as any);
 
+      console.log('ScannerScreen: Sending image to BBD analysis endpoint');
+
       // Call the BBD analysis endpoint
       const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-bbd-image`, {
         method: 'POST',
@@ -159,6 +161,12 @@ export default function ScannerScreen() {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
       });
+
+      console.log('ScannerScreen: BBD analysis response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
 
       const data = await response.json();
       console.log('ScannerScreen: BBD analysis result:', data);
