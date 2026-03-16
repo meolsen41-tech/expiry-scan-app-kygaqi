@@ -209,6 +209,19 @@ export default function SettingsScreen() {
             
             <View style={[styles.divider, { backgroundColor: theme.dark ? '#38383A' : '#E5E5EA' }]} />
             
+            <TouchableOpacity
+              style={styles.aboutItem}
+              onPress={() => {
+                console.log('[SettingsScreen] Navigating to Support screen');
+                router.push('/support');
+              }}
+            >
+              <Text style={[styles.aboutLabel, { color: theme.colors.text }]}>Support</Text>
+              <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={theme.dark ? '#98989D' : '#666'} />
+            </TouchableOpacity>
+            
+            <View style={[styles.divider, { backgroundColor: theme.dark ? '#38383A' : '#E5E5EA' }]} />
+            
             <View style={styles.aboutItem}>
               <Text style={[styles.aboutLabel, { color: theme.colors.text }]}>{t('settingsScreen.version')}</Text>
               <Text style={[styles.aboutValue, { color: theme.dark ? '#98989D' : '#666' }]}>{appVersion}</Text>
