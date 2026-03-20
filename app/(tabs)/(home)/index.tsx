@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from "react-native";
 import { getExpiryBatchStats, getExpiryBatches, type ExpiryBatch, type ExpiryBatchStats } from "@/utils/api";
@@ -8,6 +8,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useStore } from "@/app/_layout";
+
+function formatMonthYear(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
 
 export default function HomeScreen() {
   const [stats, setStats] = useState<ExpiryBatchStats | null>(null);
@@ -19,7 +24,7 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     console.log('[HomeScreen] Loading data', { storeId: currentStore?.id });
-    
+
     if (!currentStore?.id) {
       console.log('[HomeScreen] No store linked, showing empty state');
       setStats({ total: 0, fresh: 0, expiring: 0, expired: 0 });
@@ -34,18 +39,16 @@ export default function HomeScreen() {
         getExpiryBatchStats(currentStore.id),
         getExpiryBatches({ store_id: currentStore.id, status: 'all' }),
       ]);
-      
+
       setStats(statsData);
-      // Get 5 most recent entries
-      const sorted = entriesData.sort((a, b) => 
+      const sorted = entriesData.sort((a, b) =>
         new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
       );
       setRecentEntries(sorted.slice(0, 5));
-      
+
       console.log('[HomeScreen] Data loaded:', { stats: statsData, recentCount: sorted.length });
     } catch (error) {
       console.error('[HomeScreen] Error loading data:', error);
-      // Set empty stats on error
       setStats({ total: 0, fresh: 0, expiring: 0, expired: 0 });
       setRecentEntries([]);
     } finally {
@@ -69,16 +72,6 @@ export default function HomeScreen() {
     router.push('/(tabs)/(home)/products');
   };
 
-  const handleNotificationsPress = () => {
-    console.log('[HomeScreen] Navigate to notifications');
-    router.push('/(tabs)/(home)/notifications');
-  };
-
-  const handleBatchScanPress = () => {
-    console.log('[HomeScreen] Navigate to batch scan');
-    router.push('/(tabs)/(home)/batch-scan');
-  };
-
   const handleTeamsPress = () => {
     console.log('[HomeScreen] Navigate to teams');
     router.push('/(tabs)/(home)/teams');
@@ -96,36 +89,22 @@ export default function HomeScreen() {
 
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'fresh':
-        return '#10B981';
-      case 'expiring':
-        return '#F59E0B';
-      case 'expired':
-        return '#EF4444';
-      default:
-        return colors.textSecondary;
+      case 'fresh': return '#10B981';
+      case 'expiring': return '#F59E0B';
+      case 'expired': return '#EF4444';
+      default: return colors.textSecondary;
     }
   };
 
   const getStatusText = (status: string): string => {
     switch (status) {
-      case 'fresh':
-        return t('status.fresh');
-      case 'expiring':
-        return t('status.expiringSoon');
-      case 'expired':
-        return t('status.expired');
-      default:
-        return status;
+      case 'fresh': return t('status.fresh');
+      case 'expiring': return t('status.expiringSoon');
+      case 'expired': return t('status.expired');
+      default: return status;
     }
   };
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  // Show loading spinner only during initial store load
   if (storeLoading && !stats) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -149,9 +128,6 @@ export default function HomeScreen() {
   const expiringSoonText = t('home.expiringSoon');
   const expiredText = t('home.expired');
   const scanBarcodeText = t('home.scanBarcode');
-  const batchScanText = t('home.batchScan');
-  const notificationsText = t('home.notifications');
-  const teamsText = t('home.teams');
   const dailyCheckText = 'Daily Check';
   const recentScansText = t('home.recentScans');
   const viewAllText = t('home.viewAll');
@@ -159,7 +135,6 @@ export default function HomeScreen() {
   const noProductsSubtextText = t('home.noProductsSubtext');
   const expiresText = t('home.expires');
 
-  // Show message if no store is linked
   const showNoStoreMessage = !currentStore;
 
   return (
@@ -215,13 +190,9 @@ export default function HomeScreen() {
               <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={24} color={colors.primary} />
               <Text style={styles.secondaryActionText}>{dailyCheckText}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryAction} onPress={handleBatchScanPress}>
-              <IconSymbol ios_icon_name="tray.fill" android_material_icon_name="inventory" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>{batchScanText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryAction} onPress={handleNotificationsPress}>
-              <IconSymbol ios_icon_name="bell.fill" android_material_icon_name="notifications" size={24} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>{notificationsText}</Text>
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleTeamsPress}>
+              <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={24} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>{t('home.teams')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -245,10 +216,10 @@ export default function HomeScreen() {
               {recentEntries.map((entry) => {
                 const statusColor = getStatusColor(entry.status || 'fresh');
                 const statusText = getStatusText(entry.status || 'fresh');
-                const expirationDate = formatDate(entry.expiryDate);
+                const expirationDate = formatMonthYear(entry.expiryDate);
                 const productName = entry.productName || entry.barcode;
                 const quantityText = `${entry.quantity}x`;
-                
+
                 return (
                   <View key={entry.id} style={styles.recentItem}>
                     <View style={styles.recentItemInfo}>

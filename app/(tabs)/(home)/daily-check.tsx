@@ -99,7 +99,7 @@ export default function DailyCheckScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString();
+    return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
   };
 
   const formatTime = (dateString: string): string => {

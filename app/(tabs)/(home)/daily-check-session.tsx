@@ -140,7 +140,7 @@ export default function DailyCheckSessionScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString();
+    return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
   };
 
   const getStatusColor = (status: string): string => {
